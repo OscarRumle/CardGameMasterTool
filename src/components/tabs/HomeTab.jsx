@@ -5,6 +5,7 @@ const HomeTab = ({ onCreateDeck, onViewDecks, deckCount }) => {
     <div>
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-green-500 mb-4">HELLO</h1>
+        <p className="text-2xl font-bold text-blue-400 mb-4">HOT RELOAD IS WORKING! 🚀</p>
         <h1 className="text-6xl font-bold text-amber-500 mb-4 tracking-wider">CARD GENERATOR</h1>
         <p className="text-xl text-zinc-400 tracking-wide">CREATE • CUSTOMIZE • CONQUER</p>
       </div>
