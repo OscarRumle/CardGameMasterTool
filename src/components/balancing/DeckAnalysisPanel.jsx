@@ -3,6 +3,10 @@ import { FileText } from 'lucide-react';
 import ManaCurveDisplay from './ManaCurveDisplay';
 
 const DeckAnalysisPanel = memo(({ deck, analysis, color }) => {
+  // Map color to actual Tailwind classes
+  const borderClass = color === 'green' ? 'border-green-600' : 'border-blue-600';
+  const textClass = color === 'green' ? 'text-green-400' : 'text-blue-400';
+
   if (!analysis) {
     return (
       <div className="bg-zinc-950 border-2 border-dashed border-zinc-800 p-12 text-center">
@@ -13,7 +17,7 @@ const DeckAnalysisPanel = memo(({ deck, analysis, color }) => {
   }
 
   return (
-    <div className={`bg-zinc-950 border-2 border-${color}-600 p-4 space-y-6`}>
+    <div className={`bg-zinc-950 border-2 ${borderClass} p-4 space-y-6`}>
       <h3 className="text-xl font-bold text-white tracking-wide">{deck.name}</h3>
 
       <div>
@@ -44,21 +48,21 @@ const DeckAnalysisPanel = memo(({ deck, analysis, color }) => {
       </div>
 
       <div>
-        <h4 className={`text-base font-bold text-${color}-400 mb-3 tracking-wide`}>CARD TYPES</h4>
+        <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>CARD TYPES</h4>
         <div className="space-y-2">
           <div className="flex justify-between items-center bg-zinc-900 p-2">
             <span className="text-white text-sm">Spells</span>
-            <span className={`text-${color}-400 font-bold`}>{analysis.spellCount}</span>
+            <span className={`${textClass} font-bold`}>{analysis.spellCount}</span>
           </div>
           <div className="flex justify-between items-center bg-zinc-900 p-2">
             <span className="text-white text-sm">Minions</span>
-            <span className={`text-${color}-400 font-bold`}>{analysis.minionCount}</span>
+            <span className={`${textClass} font-bold`}>{analysis.minionCount}</span>
           </div>
         </div>
       </div>
 
       <div>
-        <h4 className={`text-base font-bold text-${color}-400 mb-3 tracking-wide`}>MINION STRENGTH</h4>
+        <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>MINION STRENGTH</h4>
         <div className="bg-zinc-900 p-3 text-center">
           <span className="text-2xl font-bold text-white">
             {analysis.totalAttack} / {analysis.totalHealth}
@@ -68,7 +72,7 @@ const DeckAnalysisPanel = memo(({ deck, analysis, color }) => {
       </div>
 
       <div>
-        <h4 className={`text-base font-bold text-${color}-400 mb-3 tracking-wide`}>TOTAL MINION GOLD</h4>
+        <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>TOTAL MINION GOLD</h4>
         <div className="bg-zinc-900 p-3 text-center">
           <span className="text-2xl font-bold text-amber-500">💰 {analysis.totalMinionGold}g</span>
           <p className="text-zinc-500 text-xs mt-1">If all minions killed</p>
@@ -76,19 +80,19 @@ const DeckAnalysisPanel = memo(({ deck, analysis, color }) => {
       </div>
 
       <div>
-        <h4 className={`text-base font-bold text-${color}-400 mb-3 tracking-wide`}>UNIQUE CARDS</h4>
+        <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>UNIQUE CARDS</h4>
         <div className="flex justify-between items-center bg-zinc-900 p-2">
           <span className="text-white text-sm">Distinct cards</span>
-          <span className={`text-${color}-400 font-bold`}>{analysis.uniqueCards}</span>
+          <span className={`${textClass} font-bold`}>{analysis.uniqueCards}</span>
         </div>
       </div>
 
       <div>
-        <h4 className={`text-base font-bold text-${color}-400 mb-3 tracking-wide`}>KEYWORD USAGE</h4>
+        <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>KEYWORD USAGE</h4>
         <div className="space-y-2">
           <div className="flex justify-between items-center bg-zinc-900 p-2">
             <span className="text-white text-sm">With keywords</span>
-            <span className={`text-${color}-400 font-bold`}>{analysis.keywordCards}</span>
+            <span className={`${textClass} font-bold`}>{analysis.keywordCards}</span>
           </div>
           <div className="flex justify-between items-center bg-zinc-900 p-2">
             <span className="text-white text-sm">Without keywords</span>

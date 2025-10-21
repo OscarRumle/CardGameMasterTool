@@ -3,7 +3,7 @@ import AutoSizeEffectText from './AutoSizeEffectText';
 import { applyKeywordBolding } from '../../utils/customization';
 
 const ClassCard = memo(({ card, customization, textSettings, keywords }) => {
-  const type = card['Card Type']?.toLowerCase();
+  const type = card['Card Type'] ? String(card['Card Type']).toLowerCase() : 'minion';
   const color = customization[type]?.color || customization.minion?.color || '#000';
   const isMinion = card['Card Type'] === 'Minion';
   const effectHTML = applyKeywordBolding(card.Effect || '', keywords);
