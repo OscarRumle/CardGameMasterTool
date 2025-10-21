@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { simulateGoldGain } from '../../utils/goldSimulator';
+import { analyzeDeck } from '../../utils/deckAnalyzer';
 import GoldGraph from './GoldGraph';
 import AffordableItemsList from './AffordableItemsList';
 
@@ -68,6 +69,17 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
       minionDeathRate
     });
   }, [balanceDeck1, balanceDeck2, equipmentDeck, maxRounds, passiveGold, minionDeathRate]);
+
+  // Deck analysis for total minion gold
+  const deck1Analysis = useMemo(() =>
+    balanceDeck1 ? analyzeDeck(balanceDeck1, []) : null,
+    [balanceDeck1]
+  );
+
+  const deck2Analysis = useMemo(() =>
+    balanceDeck2 ? analyzeDeck(balanceDeck2, []) : null,
+    [balanceDeck2]
+  );
 
   const equipmentDecks = decks.filter(d => d.type === 'equipment');
 
@@ -207,6 +219,15 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
             ))}
           </select>
 
+          {/* Total Minion Gold Stat */}
+          {balanceDeck2 && deck2Analysis && (
+            <div className="mb-4 p-3 bg-black border-2 border-zinc-800 text-center">
+              <h3 className="text-xs font-bold text-zinc-400 mb-1">OPPONENT'S TOTAL MINION GOLD</h3>
+              <span className="text-2xl font-bold text-amber-500">💰 {deck2Analysis.totalMinionGold}g</span>
+              <p className="text-xs text-zinc-500 mt-1">Max gold if all {balanceDeck2.name} minions killed</p>
+            </div>
+          )}
+
           {balanceDeck1 && deck1Simulation && (
             <>
               <GoldGraph data={deck1Simulation} color="green" />
@@ -233,6 +254,15 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
               <option key={deck.id} value={deck.id}>{deck.name}</option>
             ))}
           </select>
+
+          {/* Total Minion Gold Stat */}
+          {balanceDeck1 && deck1Analysis && (
+            <div className="mb-4 p-3 bg-black border-2 border-zinc-800 text-center">
+              <h3 className="text-xs font-bold text-zinc-400 mb-1">OPPONENT'S TOTAL MINION GOLD</h3>
+              <span className="text-2xl font-bold text-amber-500">💰 {deck1Analysis.totalMinionGold}g</span>
+              <p className="text-xs text-zinc-500 mt-1">Max gold if all {balanceDeck1.name} minions killed</p>
+            </div>
+          )}
 
           {balanceDeck2 && deck2Simulation && (
             <>
