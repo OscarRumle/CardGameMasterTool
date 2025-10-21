@@ -81,7 +81,7 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
       <div className="mb-6 p-6 bg-zinc-900 border-2 border-zinc-800">
         <h2 className="text-xl font-bold text-amber-500 mb-4 tracking-wide">SIMULATION PARAMETERS</h2>
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-4 gap-6">
           {/* Passive Gold */}
           <div>
             <label className="block text-sm font-bold text-zinc-400 mb-2">
@@ -132,8 +132,50 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
             />
             <p className="text-xs text-zinc-500 mt-1">Rounds to simulate (12 default)</p>
           </div>
+
+          {/* Equipment Deck */}
+          <div>
+            <label className="block text-sm font-bold text-zinc-400 mb-2">
+              Equipment Deck
+            </label>
+            <select
+              value={equipmentDeck?.id || ''}
+              onChange={(e) => {
+                const deck = decks.find(d => d.id === parseInt(e.target.value));
+                setEquipmentDeck(deck || null);
+              }}
+              className="w-full bg-black text-white px-4 py-2 border-2 border-zinc-800 focus:border-amber-500 focus:outline-none"
+            >
+              <option value="">Select equipment deck...</option>
+              {equipmentDecks.map(deck => (
+                <option key={deck.id} value={deck.id}>{deck.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500 mt-1">Items heroes can buy</p>
+          </div>
         </div>
       </div>
+
+      {/* Tier Availability Info */}
+      {equipmentDeck && (
+        <div className="mb-6 p-4 bg-zinc-900 border-2 border-zinc-800">
+          <h3 className="text-sm font-bold text-amber-500 mb-2">TIER AVAILABILITY</h3>
+          <div className="grid grid-cols-3 gap-4 text-xs text-zinc-400">
+            <div>
+              <span className="text-amber-400 font-bold">Tier 1:</span> Rounds 1-4
+            </div>
+            <div>
+              <span className="text-amber-400 font-bold">Tier 2:</span> Rounds 5-8
+            </div>
+            <div>
+              <span className="text-amber-400 font-bold">Tier 3:</span> Rounds 9+
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 mt-2">
+            Note: Old tiers become unavailable when new tier unlocks.
+          </p>
+        </div>
+      )}
 
       {/* Warning Messages */}
       {showDeckWarning && (
@@ -144,8 +186,8 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
         </div>
       )}
 
-      {/* Main Layout: 3 columns */}
-      <div className="grid grid-cols-3 gap-6">
+      {/* Main Layout: 2 columns */}
+      <div className="grid grid-cols-2 gap-6">
         {/* LEFT: Hero A (Deck 1) */}
         <div className="border-2 border-green-600 bg-zinc-900 p-6">
           <h2 className="text-2xl font-bold text-green-500 mb-4 tracking-wide">DECK A</h2>
@@ -170,47 +212,6 @@ const EconomySimulation = ({ decks, balanceDeck1, balanceDeck2, setBalanceDeck1,
               <GoldGraph data={deck1Simulation} color="green" />
               <AffordableItemsList simulation={deck1Simulation} color="green" />
             </>
-          )}
-        </div>
-
-        {/* CENTER: Equipment Deck Selector */}
-        <div className="border-2 border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-2xl font-bold text-amber-500 mb-4 tracking-wide">EQUIPMENT DECK</h2>
-
-          <select
-            value={equipmentDeck?.id || ''}
-            onChange={(e) => {
-              const deck = decks.find(d => d.id === parseInt(e.target.value));
-              setEquipmentDeck(deck || null);
-            }}
-            className="w-full bg-black text-white px-4 py-3 mb-4 border-2 border-zinc-800 focus:border-amber-500 focus:outline-none"
-          >
-            <option value="">Select equipment deck...</option>
-            {equipmentDecks.map(deck => (
-              <option key={deck.id} value={deck.id}>{deck.name}</option>
-            ))}
-          </select>
-
-          {showEquipmentWarning && !showDeckWarning && (
-            <div className="mt-4 p-4 bg-black border-2 border-zinc-800">
-              <p className="text-zinc-400 text-sm">
-                Select an equipment deck to see which items heroes can afford.
-              </p>
-            </div>
-          )}
-
-          {equipmentDeck && (
-            <div className="mt-4 p-4 bg-black border-2 border-zinc-800">
-              <h3 className="text-sm font-bold text-amber-500 mb-2">TIER AVAILABILITY</h3>
-              <div className="text-xs text-zinc-400 space-y-1">
-                <p><span className="text-amber-400">Tier 1:</span> Rounds 1-4</p>
-                <p><span className="text-amber-400">Tier 2:</span> Rounds 5-8</p>
-                <p><span className="text-amber-400">Tier 3:</span> Rounds 9+</p>
-              </div>
-              <p className="text-xs text-zinc-500 mt-3">
-                Old tiers become unavailable when new tier unlocks.
-              </p>
-            </div>
           )}
         </div>
 
