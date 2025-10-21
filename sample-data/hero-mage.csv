@@ -1,0 +1,11 @@
+Card Name,Mana Cost,Card Type,Attack,Health,Bounty,Effect,Copies
+Mage Apprentice,1,Minion,1,1,1g,Draw a card,3
+Fire Elemental,2,Minion,3,2,2g,Deal 1 damage when summoned,3
+Arcane Scholar,3,Minion,2,4,3g,Gain +1 spell damage,2
+Fireball,3,Spell,,,,"Deal 4 damage to any target",2
+Ice Blast,2,Spell,,,,"Freeze a minion, it can't attack next turn",2
+Archmage,5,Minion,4,4,5g,Spells cost 1 less mana,2
+Flame Strike,6,Spell,,,,Deal 3 damage to all enemy minions,1
+Frost Nova,3,Spell,,,,Freeze all enemy minions,2
+Mystic Bolt,1,Spell,,,,Deal 2 damage,3
+Mana Wyrm,1,Minion,1,2,1g,Gain +1 attack when you cast a spell,3
