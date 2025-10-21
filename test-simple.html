@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Simple Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #000000;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+    .test-box {
+      background-color: #f59e0b;
+      padding: 40px;
+      border-radius: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="test-box">
+    <h1>🎯 TEST SUCCESSFUL!</h1>
+    <p>If you see this with a black background and orange box, your browser is working fine!</p>
+    <p>The problem is likely with the React app build or browser cache.</p>
+  </div>
+
+  <h2 style="margin-top: 40px;">Troubleshooting Steps:</h2>
+  <ol style="line-height: 2;">
+    <li>The app files ARE loading (no CORS errors)</li>
+    <li>CSS is included and working</li>
+    <li>The issue is likely a JavaScript error</li>
+  </ol>
+
+  <div id="root"></div>
+  <script>
+    // Try to load React from the build
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = './dist/assets/index-CEoXbqBf.js';
+    script.onerror = function() {
+      document.body.innerHTML += '<h2 style="color: red;">❌ Failed to load React app JavaScript!</h2>';
+    };
+    script.onload = function() {
+      setTimeout(() => {
+        const root = document.getElementById('root');
+        if (root && root.children.length > 0) {
+          document.body.innerHTML = '<h1 style="color: green;">✅ REACT APP LOADED!</h1>' + document.body.innerHTML;
+        } else {
+          document.body.innerHTML += '<h2 style="color: orange;">⚠️ React loaded but didn\'t render anything</h2><p>Check browser console (F12) for JavaScript errors.</p>';
+        }
+      }, 2000);
+    };
+    document.body.appendChild(script);
+
+    // Also load the CSS
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = './dist/assets/index-DJtgi2GF.css';
+    document.head.appendChild(link);
+  </script>
+</body>
+</html>
