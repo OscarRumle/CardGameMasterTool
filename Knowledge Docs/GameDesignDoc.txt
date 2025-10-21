@@ -1,0 +1,454 @@
+# CARD GAME DESIGN DOCUMENT - SOURCE OF TRUTH
+
+## PROJECT OVERVIEW
+
+A 1v1 fantasy card battler with hero progression, persistent equipment shop, and tactical MTG-style combat. Designed for physical play with emphasis on economic decision-making and meaningful interactions.
+
+---
+
+## CORE GAME STRUCTURE
+
+### Setup
+
+**Starting Resources:**
+- **Health:** 20
+- **Mana:** 1 mana 
+- **Armor:** 0
+- **Gold:** 0
+- **Class Resource:** 0 (Rage, Spell Damage, etc.)
+
+**Deck Construction:**
+- **40-card decks** 
+- Separate equipment shop deck (45 items total)
+- **No hand size limit**
+
+**Opening Hand:**
+- Draw **4 cards** (player going second draws 1 more card)
+- **Mulligan:** Choose up to 3 cards to redraw (shuffle back, draw new)
+
+**First Player Determination:**
+- Both players roll a die
+- Highest roll chooses who goes first
+- Second player starts with 2 mana (first player advantage compensation)
+
+---
+
+## GAME ZONES & INFORMATION
+
+**Public Information:**
+- All minions on battlefield (stats, damage, positions)
+- Hero health, armor, mana, class resources
+- Gold totals
+- Equipment on hero boards
+- Upgrade cards on hero boards
+- Number of cards in each hand (count visible)
+- Discard piles (reviewable by both players)
+- Level-up status
+- Shop market (5 face-up cards)
+
+**Hidden Information:**
+- Cards in hand (contents)
+- Cards in deck (order)
+
+**Card Zones:**
+- **Deck:** Face-down, shuffled
+- **Hand:** Hidden from opponent
+- **Battlefield:** Your side vs opponent's side
+- **Hero Board:** Equipment and ability upgrades (visible)
+- **Discard Pile:** Face-up, reviewable
+- **Shop Market:** 5 face-up equipment cards (shared)
+
+---
+
+## TURN STRUCTURE
+
+### Game Structure
+- A **round** = both players taking one turn each
+- **Shop refreshes at Round 4 and Round 7**
+- Games typically end around Round 10-15
+
+### Turn Phases
+
+**UPKEEP PHASE**
+1. Untap all your tapped minions
+2. Gain +1 max mana (max 10), then refill mana pool to max
+3. Draw 1 card
+4. Trigger "start of turn" effects
+
+**MAIN PHASE**
+Active player may perform actions in any order:
+- Play cards from hand
+- Use Hero Power (once per turn, costs mana)
+- Use Attack (costs 2 mana, once per turn)
+- Use Defensive Ability (must have 3 mana available, once per turn, when taking damage)
+- Buy from shop (once per turn)
+- Declare attackers for combat
+
+**COMBAT PHASE**
+When ready during Main Phase, declare combat:
+
+- **Declare Attackers:** Tap minions to attack (all attack defending hero)
+- **Declare Blockers:** Defender assigns untapped minions to block
+  - Each blocker blocks one attacker
+  - Multiple blockers can gang up on one attacker
+  - Blockers don't tap
+- **Damage Assignment:** If multiple blockers on one attacker, attacker orders blockers and assigns damage (must deal lethal to first before second)
+- **Resolve Combat:** All damage simultaneous
+  - Blocked attackers damage blockers only
+  - Blockers damage attackers
+  - Unblocked attackers damage hero (reduced by armor)
+  - Minions with damage ≥ health die
+  - Bounties awarded immediately
+
+After combat, continue Main Phase actions (if not already used).
+
+**When finished, announce "Pass turn"**
+
+**END PHASE**
+1. Gold tracking updates
+2. Trigger "end of turn" effects
+3. **All minions heal to full health**
+4. Pass turn to opponent
+
+---
+
+## RESOURCE SYSTEMS
+
+### Mana
+- Generic mana pool (no colored mana)
+- Gain +1 max mana per turn during Upkeep (max 10)
+- Current mana refills to max each Upkeep
+- Starting: 1 mana (2 mana for second player)
+- **Mana potions can increase beyond cap 10** (up to 12-14)
+
+### Gold
+- Earned from killing enemy minions (bounty value)
+- Earned from card effects
+- Spent during Main Phase to buy from shop
+- Starting: 0 gold
+
+### Armor
+- Each point reduces incoming damage by 1
+- Persists across turns until consumed
+- Can go negative (minions take extra damage)
+- Tracked with dice
+
+### Class Resources
+- **Rage (Barbarian):** Increases Attack damage, increases damage taken
+- **Spell Damage (Mage):** Spend to boost spell damage
+- Tracked with class-colored dice
+
+---
+
+## HERO BOARD SYSTEM
+
+### Equipment Slots (Left Side)
+All equipment purchased with gold from shop, provides passive effects.
+
+**1. Weapon Slot**
+- Base weapon damage and offensive effects
+- Automatic on-hit effects
+- Example: "Maelstrom - Your Weapon Attacks deal +1 damage. When you kill a minion with a Weapon Attack, deal 2 damage to another random enemy minion"
+
+**2. Chest Slot**
+- Health, armor, defensive effects
+- Automatic survival effects
+- Example: "Vanguard - +5 Health, +2 starting Armor. First time you take 4+ damage each turn, reduce by 3"
+
+**3. Jewelry Slot**
+- Gold generation, card advantage
+- Economic effects
+- Example: "Lucky Coin - Whenever you kill an enemy minion, gain +1 bonus gold"
+
+**4. Relic Slot**
+- Passive auras OR once-per-game activated abilities
+- Special abilities
+- Example Passive: "Radiance - At start of turn, deal 1 damage to all enemy minions"
+- Example Active: "Black King Bar - Once per game, pay 3 mana: Your hero is Immune until end of turn"
+
+### Hero Ability Slots (Right Side)
+Core abilities upgraded by playing Upgrade cards from deck.
+
+**1. Hero Power**
+- Active ability, costs mana (usually 1-2)
+- Once per turn
+- Class-specific effect
+- Mana curve smoother
+- Example: "Cost 2 mana. Gain 2 Armor"
+
+**2. Attack**
+- Active ability, costs 2 mana
+- Once per turn, any time during Main Phase
+- Base: "Deal weapon damage to target. Take damage back if attacking minion."
+- If kills minion, gain bounty
+- Example upgrade: "Deal weapon damage +2. If you kill it, don't take damage back"
+
+**3. Defensive Ability**
+- Active ability, must have 3 mana available
+- Once per turn, when taking damage
+- Timing: Activate before damage applies
+- If multiple sources hit simultaneously, choose one
+- Class-specific effect
+- Base: "Gain 2 Armor and take half damage from that source (rounded up)"
+
+### Upgrade System
+- Play Upgrade cards from deck onto ability slots (costs mana)
+- Replaces base ability permanently
+- Creates long-term investment decisions
+
+---
+
+## PERSISTENT SHOP SYSTEM
+
+### Shop Structure
+- **5 cards face-up at all times** (shared market)
+- Both players can see all options
+- First-come, first-served
+- 45 total items: 36 equipment + 9 consumables
+
+**Three Tier Decks:**
+- **Early (Tier 1):** 2-5g items, Rounds 1-3
+- **Mid (Tier 2):** 6-8g items, Rounds 4-6
+- **Late (Tier 3):** 9-15g items, Round 7+
+
+### Shop Refresh Timing
+- **Rounds 1-3:** 5 Early items available (same items all rounds)
+- **Round 4:** Refresh → 5 Mid items
+- **Rounds 4-6:** Same 5 Mid items available
+- **Round 7:** Refresh → 5 Late items
+- **Round 7+:** Same 5 Late items for rest of game
+
+### Purchasing Rules
+- Buy during Main Phase (once per turn)
+- Pay gold cost
+- Equipment immediately equipped (replaces old)
+- Consumables activate immediately
+- Purchased slot stays empty until refresh
+
+### Item Categories
+
+**Equipment (36 items):**
+- 7 Weapons (damage scaling)
+- 7 Chest pieces (defense/health)
+- 7 Jewelry pieces (economy)
+- 15 Relics (8 passive, 7 active)
+
+**Consumables (9 items):**
+- **Mana Potions:** +1/+2/+4 max mana (4g/7g/13g)
+- **Health Potions:** Restore 4/7/12 health (3g/5g/8g)
+- **Knowledge Potions:** Draw 1/3/5 cards (2g/6g/10g)
+
+### Strategic Implications
+- Constant economic tension (every turn matters)
+- Denial strategies (buy to prevent opponent access)
+- Tempo vs value decisions
+- Information warfare (both see same options)
+
+---
+
+## COMBAT SYSTEM
+
+### MTG-Style Blocking
+
+**Battlefield:**
+- Shared battlefield, your side vs opponent's side
+- No fixed position restrictions
+- Minions clearly on your side or theirs
+
+**Combat Flow:**
+1. **Declare Attackers** - Active player taps minions (they attack hero, not specific minions)
+2. **Declare Blockers** - Defender assigns blockers (any blocker can block any attacker)
+3. **Damage Assignment** - Attacker orders multiple blockers if gang-up
+4. **Resolve** - All damage simultaneous, minions die, bounties awarded
+
+**Key Rules:**
+- Attackers tap, blockers don't
+- Summoning sickness prevents attacking but not blocking
+- Blocking prevents all hero damage from that attacker (even if blockers die)
+- All minions heal to full at end of turn
+
+**Multi-Block Example:**
+- 6/6 attacker blocked by 2/2 and 3/3
+- Attacker orders: 2/2 first, 3/3 second
+- Attacker assigns: 2 to first (lethal), 4 to second
+- Blockers deal: 5 total to attacker
+- Result: 2/2 dies, 3/3 survives at 3/1, attacker survives at 6/1
+
+---
+
+## LEVEL-UP SYSTEM
+
+### Structure
+Every hero has:
+1. **One Condition** - Objective to achieve (e.g., "Have 8+ Armor")
+2. **One Passive Bonus** - Permanent reward when leveled
+3. **Ultimate Access** - Ultimate cards become playable
+
+### Rules
+- Level up once per game (permanent)
+- Bonus remains active even if condition no longer met
+- Ultimates unplayable until leveled (dead cards early)
+- Players track own progress (paper/dice for cumulative conditions)
+
+### Condition Types
+- **Stat thresholds:** "Have 8+ Armor"
+- **Cumulative actions:** "Deal 12+ damage with Weapon Attacks"
+- **Board states:** "Control 4+ minions at once"
+- **Resource milestones:** "Reach 10 Max Mana"
+
+### Design Principles
+- Achievable turns 5-8 (mid-game power spike)
+- Reinforces class playstyle
+- Creates mini-objectives beyond "reduce opponent to 0"
+
+### Example Level-Ups
+
+**Barbarian:**
+- Condition: Have 8+ Armor
+- Effect: Your Weapon Attacks deal bonus damage equal to Armor
+- Theme: Defense enables offense
+
+**Mage:**
+- Condition: Reach 10 Max Mana
+- Effect: Your spells cost 1 less
+- Theme: Late-game efficiency
+
+---
+
+## KEYWORDS & MECHANICS
+
+### Universal Mechanics
+
+**Armor**
+- Each point reduces incoming damage by 1
+- Persists across turns until consumed
+- Can go negative (minions take extra damage)
+- Example: 3 Armor, take 5 damage → 0 Armor, 2 damage to health
+
+**Bounty**
+- Gold awarded when minion dies
+- Killing player gains bounty
+- Values: 1g (small), 2g (medium), 3g (large)
+
+**Summoning Sickness**
+- Cannot attack turn played
+- CAN block immediately
+
+**Tapping**
+- Turn sideways when attacking
+- Cannot attack or block while tapped
+- Untap at start of your turn
+- Blockers don't tap
+
+---
+
+### Class-Specific Mechanics
+
+**Rage (Barbarian)**
+- Each point: +1 damage on Attack, +1 damage taken per hit
+- Persists across turns
+- Risk/reward offensive resource
+- Example: 3 Rage = Attack deals +3 damage, but take +3 from each incoming hit
+
+**Spell Damage (Mage)**
+- When casting damage spell, choose how much to spend (0 to current total)
+- Each point spent = +1 spell damage
+- Spent amount consumed
+- Max 5 Spell Damage
+- Example: 4 Spell Damage, cast Fireball (3 base). Spend 3 → 6 damage, 1 Spell Damage remaining
+
+**Channeled (Mage keyword)**
+- Bonus effect if you cast another spell this turn first
+- Rewards spell chaining
+- Example: "Deal 2 damage. Channeled: Deal 4 damage instead"
+
+---
+
+## CARD TYPES
+
+**Minion**
+- Attack / Health / Bounty stats
+- Placed on your side of battlefield
+- Summoning sickness applies
+
+**Spell**
+- Does effect, goes to discard
+- Played during Main Phase
+
+**Equipment**
+- Goes in equipment slots (purchased from shop)
+- Grants passive stats and effects
+
+**Upgrade**
+- Goes on hero ability slots
+- Permanently enhances abilities
+- Played from deck during Main Phase
+
+**Ultimate**
+- Special high-impact spells
+- Only playable after leveling up
+- Game-changing effects
+
+---
+
+## WIN CONDITIONS
+
+**Primary Victory:**
+- Reduce opponent to 0 health
+
+**Deck-Out:**
+- When drawing with empty deck, shuffle discard to form new deck
+- No deck-out loss
+
+**Simultaneous Death:**
+- Both hit 0 HP = draw
+
+---
+
+## PHYSICAL COMPONENTS
+
+### Dice Tracking
+
+**Hero Board Trackers (Class-Colored):**
+- Mana (d12) - current/max mana
+- Health (d20) - current health
+- Armor (d12) - current armor
+- Class Resource (d12) - Rage, Spell Damage, etc.
+
+**Minion Trackers (Neutral d6/d8):**
+- Each minion has die showing current health
+- Damage doesn't persist (reset at end of turn)
+
+**First Player Roll:**
+- Both roll d6/d20
+- Highest chooses first player
+
+### Board Layout
+- Tri-fold board system
+- Two hero boards (north/south)
+- Central battlefield (shared)
+- Shop market display area (5 cards visible)
+
+---
+
+## DESIGN NOTES
+
+### Player Scaling
+- Primary: 1v1
+- Future support: 2v2, 3v3 with lane system
+
+### Hero System
+- 8 classes planned (Barbarian, Mage, etc.)
+- Multiple hero variants per class (future)
+- Cross-class heroes (future expansion)
+
+### Randomness Philosophy
+- Input randomness preferred (setup variance)
+- Minimal output randomness (no dice rolls for actions)
+- Card draw provides core variance
+- Shop refresh creates economic variance
+
+### Game Length
+- Target: 20-30 minutes
+- Typical: 10-15 rounds (20-30 turns total)
+- Shop refreshes at Round 4 and 7 create clear game phases
