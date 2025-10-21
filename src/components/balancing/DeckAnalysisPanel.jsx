@@ -72,14 +72,6 @@ const DeckAnalysisPanel = memo(({ deck, analysis, color }) => {
       </div>
 
       <div>
-        <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>TOTAL MINION GOLD</h4>
-        <div className="bg-zinc-900 p-3 text-center">
-          <span className="text-2xl font-bold text-amber-500">💰 {analysis.totalMinionGold}g</span>
-          <p className="text-zinc-500 text-xs mt-1">If all minions killed</p>
-        </div>
-      </div>
-
-      <div>
         <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>UNIQUE CARDS</h4>
         <div className="flex justify-between items-center bg-zinc-900 p-2">
           <span className="text-white text-sm">Distinct cards</span>
