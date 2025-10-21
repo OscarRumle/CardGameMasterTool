@@ -5,7 +5,7 @@ const ManaCurveDisplay = memo(({ curve, totalCards, color, title }) => {
   const textClass = color === 'green' ? 'text-green-400' : 'text-blue-400';
   const bgClass = color === 'green' ? 'bg-green-600' : 'bg-blue-600';
 
-  if (Object.keys(curve).length === 0) {
+  if (Object.keys(curve).length === 0 || totalCards === 0) {
     return (
       <>
         <h4 className={`text-base font-bold ${textClass} mb-3 tracking-wide`}>{title}</h4>

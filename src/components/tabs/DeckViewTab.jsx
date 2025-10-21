@@ -13,7 +13,7 @@ const DeckViewTab = ({ deck, textSettings, keywords, onBack, onCustomize, onExpo
             ← BACK TO DECKS
           </button>
           <h1 className="text-4xl font-bold text-white tracking-wide">{deck.name}</h1>
-          <p className="text-zinc-500 mt-2">{deck.cards.length} cards</p>
+          <p className="text-zinc-500 mt-2">{deck.cards?.length || 0} cards</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -39,7 +39,7 @@ const DeckViewTab = ({ deck, textSettings, keywords, onBack, onCustomize, onExpo
         gap: '5mm',
         justifyContent: 'center'
       }}>
-        {deck.cards.map((card) => (
+        {(deck.cards || []).map((card) => (
           <div key={card.id}>
             <MTGCard card={card} customization={deck.customization} textSettings={textSettings} keywords={keywords} />
           </div>
