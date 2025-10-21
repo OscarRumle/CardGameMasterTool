@@ -41,7 +41,7 @@ const MyDecksTab = ({ decks, onCreateDeck, onViewDeck, onExportDeck, onDeleteDec
 
               <div className="text-zinc-500 text-sm mb-4 flex items-center gap-2">
                 <FileText className="w-4 h-4" />
-                <span>{deck.cards.length} cards</span>
+                <span>{deck.cards?.length || 0} cards</span>
               </div>
 
               <div className="flex gap-2">

@@ -4,9 +4,10 @@ import MTGCard from '../cards/MTGCard';
 const A4PrintLayout = memo(({ deck, textSettings, keywords, easyPrintMode = false }) => {
   const cardsPerPage = 9;
   const pages = [];
+  const cards = deck.cards || [];
 
-  for (let i = 0; i < deck.cards.length; i += cardsPerPage) {
-    pages.push(deck.cards.slice(i, i + cardsPerPage));
+  for (let i = 0; i < cards.length; i += cardsPerPage) {
+    pages.push(cards.slice(i, i + cardsPerPage));
   }
 
   if (easyPrintMode) {

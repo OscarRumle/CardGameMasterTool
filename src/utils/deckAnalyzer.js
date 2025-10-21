@@ -39,7 +39,7 @@ export const analyzeDeck = (deck, keywords) => {
     if (card['Card Type'] === 'Minion') {
       const copies = card.Copies || 1;
       const cost = card['Mana Cost'] || 0;
-      const bountyStr = card.Bounty || '0g';
+      const bountyStr = String(card.Bounty || '0g');
       const bountyValue = parseInt(bountyStr.replace(/[^0-9]/g, '')) || 0;
 
       totalAttack += (card.Attack || 0) * copies;

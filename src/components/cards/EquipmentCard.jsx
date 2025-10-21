@@ -3,8 +3,8 @@ import AutoSizeEffectText from './AutoSizeEffectText';
 import { applyKeywordBolding } from '../../utils/customization';
 
 const EquipmentCard = memo(({ card, customization, textSettings, keywords }) => {
-  const slot = card.Slot?.toLowerCase();
-  const category = card.Category?.toLowerCase();
+  const slot = card.Slot ? String(card.Slot).toLowerCase() : null;
+  const category = card.Category ? String(card.Category).toLowerCase() : null;
   const color = customization[slot]?.color || customization[category]?.color || customization.weapon?.color || '#000';
   const effectHTML = applyKeywordBolding(card.Effect || '', keywords);
 

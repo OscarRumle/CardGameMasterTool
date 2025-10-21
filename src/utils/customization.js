@@ -20,7 +20,7 @@ export const getDefaultCustomization = (type) => {
 
 export const applyKeywordBolding = (text, keywords) => {
   if (!text || keywords.length === 0) return text;
-  let result = text;
+  let result = String(text);
   keywords.forEach(keyword => {
     const regex = new RegExp(`\\b${keyword}\\b`, 'g');
     result = result.replace(regex, `<strong>${keyword}</strong>`);
