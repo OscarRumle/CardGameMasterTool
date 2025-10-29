@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, unassignBlocker, confirmBlockers, skipBlocking, setDamageOrder, confirmDamageOrders, raiseMinion, sacrificeMinion, retrieveFromEchoZone, GAME_CONSTANTS } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
@@ -16,6 +16,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [hoveredCard, setHoveredCard] = useState(null);
   const [draggedCard, setDraggedCard] = useState(null);
   const [dragOverBattlefield, setDragOverBattlefield] = useState(false);
+  const minionRefs = useRef({}); // Track refs for all minions for arrow drawing
 
   // Create a single shared AudioContext
   const [audioContext] = useState(() => {
@@ -654,11 +655,15 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 onAttackerSelect={handleAttackerSelect}
                 animatingAttackers={animatingAttackers}
                 animatingDefenders={animatingDefenders}
+                minionRefs={minionRefs}
               />
             </div>
 
             {/* Center Divider Line */}
             <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-600 to-transparent shadow-lg shadow-amber-500/50" />
+
+            {/* Blocking Arrows Overlay */}
+            <BlockingArrows combat={gameState.combat} minionRefs={minionRefs} />
 
             {/* Combat Phase UI - Centered */}
             {gameState.combat.active && (
@@ -706,6 +711,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 animatingAttackers={animatingAttackers}
                 animatingDefenders={animatingDefenders}
                 isDragOver={dragOverBattlefield}
+                minionRefs={minionRefs}
               />
             </div>
           </div>
@@ -961,7 +967,7 @@ function HeroPanel({ state, isPlayer, isPlayerTurn, onHeroPower, onHeroAttack })
 }
 
 // Opponent Area Component
-function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttackerSelect, animatingAttackers, animatingDefenders }) {
+function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttackerSelect, animatingAttackers, animatingDefenders, minionRefs }) {
   const inBlockingPhase = combat.active && combat.phase === 'blocking' && !isPlayerTurn;
 
   return (
@@ -986,6 +992,7 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
                     onClick={() => selectedBlocker && onAttackerSelect(attacker.instanceId)}
                     clickable={selectedBlocker !== null}
                     isAttacking={animatingAttackers.has(attacker.instanceId)}
+                    cardRef={el => { if (el) minionRefs.current[attacker.instanceId] = el; }}
                   />
                   {blockCount > 0 && (
                     <div className="absolute -bottom-2 left-0 right-0 text-center">
@@ -1015,6 +1022,7 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
                 isOpponent={true}
                 isAttacking={animatingAttackers.has(minion.instanceId)}
                 isDefending={animatingDefenders.has(minion.instanceId)}
+                cardRef={el => { if (el) minionRefs.current[minion.instanceId] = el; }}
               />
             ))
           )}
@@ -1025,7 +1033,7 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 }
 
 // Compact Hand Card Component
-function CompactHandCard({ card, canPlay, isDragging, onDragStart, onDragEnd }) {
+function CompactHandCard({ card, canPlay, isDragging, onDragStart, onDragEnd, onHover, onHoverEnd }) {
   const isMinion = card.cardType === 'minion';
 
   return (
@@ -1040,6 +1048,8 @@ function CompactHandCard({ card, canPlay, isDragging, onDragStart, onDragEnd }) 
         }
       }}
       onDragEnd={onDragEnd}
+      onMouseEnter={() => onHover && onHover(card)}
+      onMouseLeave={() => onHoverEnd && onHoverEnd()}
       className={`relative w-36 h-24 rounded-lg border-2 p-2 text-xs select-none
         ${isMinion ? 'bg-green-900/40 border-green-700' : 'bg-purple-900/40 border-purple-700'}
         ${canPlay ? 'cursor-grab hover:border-amber-500 hover:scale-105' : 'opacity-50 cursor-not-allowed'}
@@ -1077,35 +1087,53 @@ function CompactHandCard({ card, canPlay, isDragging, onDragStart, onDragEnd }) 
 
 // Simple Hand Display Component
 function PlayerHandMTG({ hand, isPlayerTurn, currentMana, onDragStart, onDragEnd, draggedCard }) {
-  return (
-    <div className="fixed bottom-20 left-0 right-0 z-30 pointer-events-none flex justify-center">
-      <div className="flex items-center gap-2 pointer-events-auto max-w-screen-xl overflow-x-auto px-4 py-2 bg-zinc-900/80 rounded-t-lg">
-        {hand.length === 0 ? (
-          <div className="text-zinc-500 text-sm italic px-4">No cards in hand</div>
-        ) : (
-          hand.map((card) => {
-            const canPlay = isPlayerTurn && currentMana >= card.manaCost;
-            const isDragging = draggedCard?.instanceId === card.instanceId;
+  const [hoveredCard, setHoveredCard] = useState(null);
 
-            return (
-              <CompactHandCard
-                key={card.instanceId}
-                card={card}
-                canPlay={canPlay}
-                isDragging={isDragging}
-                onDragStart={onDragStart}
-                onDragEnd={onDragEnd}
-              />
-            );
-          })
-        )}
+  return (
+    <>
+      {/* Enlarged Card Preview */}
+      {hoveredCard && (
+        <div className="fixed bottom-48 left-1/2 transform -translate-x-1/2 z-40 pointer-events-none">
+          <MTGCard
+            card={hoveredCard}
+            canPlay={isPlayerTurn && currentMana >= hoveredCard.manaCost}
+            isHovered={true}
+          />
+        </div>
+      )}
+
+      {/* Hand */}
+      <div className="fixed bottom-20 left-0 right-0 z-30 pointer-events-none flex justify-center">
+        <div className="flex items-center gap-2 pointer-events-auto max-w-screen-xl overflow-x-auto px-4 py-2 bg-zinc-900/80 rounded-t-lg">
+          {hand.length === 0 ? (
+            <div className="text-zinc-500 text-sm italic px-4">No cards in hand</div>
+          ) : (
+            hand.map((card) => {
+              const canPlay = isPlayerTurn && currentMana >= card.manaCost;
+              const isDragging = draggedCard?.instanceId === card.instanceId;
+
+              return (
+                <CompactHandCard
+                  key={card.instanceId}
+                  card={card}
+                  canPlay={canPlay}
+                  isDragging={isDragging}
+                  onDragStart={onDragStart}
+                  onDragEnd={onDragEnd}
+                  onHover={setHoveredCard}
+                  onHoverEnd={() => setHoveredCard(null)}
+                />
+              );
+            })
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders, isDragOver }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders, isDragOver, minionRefs }) {
   const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
   const isNecromancer = state.hero.name.toLowerCase() === 'necromancer';
 
@@ -1126,6 +1154,7 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
                   isOpponent={false}
                   onClick={() => isPlayerTurn && onRaiseMinion(minion.instanceId)}
                   clickable={isPlayerTurn}
+                  cardRef={el => { if (el) minionRefs.current[minion.instanceId] = el; }}
                 />
                 <div className="absolute inset-0 bg-black/40 rounded-lg pointer-events-none" />
               </div>
@@ -1172,20 +1201,8 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
                     clickable={(!combatActive && isPlayerTurn) || inBlockingPhase}
                     isAttacking={animatingAttackers.has(minion.instanceId)}
                     isDefending={animatingDefenders.has(minion.instanceId)}
+                    cardRef={el => { if (el) minionRefs.current[minion.instanceId] = el; }}
                   />
-                  {/* Necromancer Sacrifice Button */}
-                  {isNecromancer && isPlayerTurn && !combatActive && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSacrificeMinion(minion.instanceId);
-                      }}
-                      className="absolute bottom-1 left-1 right-1 bg-purple-600 text-white text-[8px] font-bold py-0.5 rounded hover:bg-purple-500 transition"
-                      title="Sacrifice for +1 mana"
-                    >
-                      SACRIFICE
-                    </button>
-                  )}
                 </div>
               );
             })
@@ -1223,8 +1240,88 @@ function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase, com
   );
 }
 
+// Blocking Arrows Component - Draws visual arrows from blockers to attackers
+function BlockingArrows({ combat, minionRefs }) {
+  if (!combat.active || combat.phase !== 'blocking') return null;
+
+  const arrows = [];
+
+  // For each attacker, draw arrows from all its blockers
+  Object.entries(combat.blockers).forEach(([attackerId, blockers]) => {
+    if (blockers.length === 0) return;
+
+    const attackerRef = minionRefs.current[attackerId];
+    if (!attackerRef) return;
+
+    const attackerRect = attackerRef.getBoundingClientRect();
+    const attackerX = attackerRect.left + attackerRect.width / 2;
+    const attackerY = attackerRect.top + attackerRect.height / 2;
+
+    blockers.forEach((blocker, index) => {
+      const blockerRef = minionRefs.current[blocker.instanceId];
+      if (!blockerRef) return;
+
+      const blockerRect = blockerRef.getBoundingClientRect();
+      const blockerX = blockerRect.left + blockerRect.width / 2;
+      const blockerY = blockerRect.top + blockerRect.height / 2;
+
+      // Create arrow path
+      arrows.push({
+        key: `${blocker.instanceId}-${attackerId}`,
+        x1: blockerX,
+        y1: blockerY,
+        x2: attackerX,
+        y2: attackerY,
+        color: blockers.length > 1 ? '#9333ea' : '#3b82f6' // purple for multi-block, blue for single
+      });
+    });
+  });
+
+  if (arrows.length === 0) return null;
+
+  return (
+    <svg className="fixed inset-0 pointer-events-none z-20" style={{ width: '100vw', height: '100vh' }}>
+      <defs>
+        <marker
+          id="arrowhead-blue"
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+        >
+          <polygon points="0 0, 10 3, 0 6" fill="#3b82f6" />
+        </marker>
+        <marker
+          id="arrowhead-purple"
+          markerWidth="10"
+          markerHeight="10"
+          refX="9"
+          refY="3"
+          orient="auto"
+        >
+          <polygon points="0 0, 10 3, 0 6" fill="#9333ea" />
+        </marker>
+      </defs>
+      {arrows.map(arrow => (
+        <line
+          key={arrow.key}
+          x1={arrow.x1}
+          y1={arrow.y1}
+          x2={arrow.x2}
+          y2={arrow.y2}
+          stroke={arrow.color}
+          strokeWidth="3"
+          markerEnd={`url(#arrowhead-${arrow.color === '#9333ea' ? 'purple' : 'blue'})`}
+          className="animate-pulse"
+        />
+      ))}
+    </svg>
+  );
+}
+
 // Minion Card Component
-function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, clickable = false, isAttacking = false, isDefending = false }) {
+function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, clickable = false, isAttacking = false, isDefending = false, cardRef = null }) {
   // Determine which animation to apply
   let animationClass = '';
   if (isAttacking) {
@@ -1237,6 +1334,7 @@ function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, cl
 
   return (
     <div
+      ref={cardRef}
       onClick={clickable ? onClick : undefined}
       className={`relative w-32 h-40 rounded-lg border-2 p-2 text-sm
         ${!isAttacking && !isDefending ? 'transition-all' : ''}
