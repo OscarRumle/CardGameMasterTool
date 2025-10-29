@@ -9,33 +9,50 @@ function GameMode({ decks }) {
   const [gameState, setGameState] = useState(null);
 
   const handleStartGame = (config) => {
-    // Expand decks based on Copies field
-    const expandedConfig = {
-      player: {
-        ...config.player,
-        deck: {
-          ...config.player.deck,
-          cards: expandDeck(config.player.deck.cards)
-        }
-      },
-      ai: {
-        ...config.ai,
-        deck: {
-          ...config.ai.deck,
-          cards: expandDeck(config.ai.deck.cards)
-        }
-      },
-      shop: config.shop
-    };
+    console.log('handleStartGame called with config:', config);
 
-    // Initialize game state
-    const initialState = initializeGame(expandedConfig);
+    try {
+      // Expand decks based on Copies field
+      console.log('Expanding player deck...');
+      const expandedPlayerCards = expandDeck(config.player.deck.cards);
+      console.log('Player deck expanded:', expandedPlayerCards.length, 'cards');
 
-    setGameConfig(expandedConfig);
-    setGameState(initialState);
-    setGamePhase('playing');
+      console.log('Expanding AI deck...');
+      const expandedAiCards = expandDeck(config.ai.deck.cards);
+      console.log('AI deck expanded:', expandedAiCards.length, 'cards');
 
-    console.log('Game initialized:', initialState);
+      const expandedConfig = {
+        player: {
+          ...config.player,
+          deck: {
+            ...config.player.deck,
+            cards: expandedPlayerCards
+          }
+        },
+        ai: {
+          ...config.ai,
+          deck: {
+            ...config.ai.deck,
+            cards: expandedAiCards
+          }
+        },
+        shop: config.shop
+      };
+
+      console.log('Initializing game state...');
+      // Initialize game state
+      const initialState = initializeGame(expandedConfig);
+      console.log('Game initialized successfully:', initialState);
+
+      setGameConfig(expandedConfig);
+      setGameState(initialState);
+      setGamePhase('playing');
+
+      console.log('Game phase set to playing');
+    } catch (error) {
+      console.error('Error starting game:', error);
+      alert('Error starting game: ' + error.message);
+    }
   };
 
   return (

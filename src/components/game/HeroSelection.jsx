@@ -45,10 +45,19 @@ function HeroSelection({ decks, onStartGame }) {
   const [aiDeck, setAiDeck] = useState(null);
   const [shopDeck, setShopDeck] = useState(null);
 
+  console.log('HeroSelection rendered with', decks.length, 'decks');
+
   const canStart = playerDeck && aiDeck && shopDeck;
 
   const handleStartGame = () => {
+    console.log('Start Game clicked!');
+    console.log('canStart:', canStart);
+    console.log('playerDeck:', playerDeck);
+    console.log('aiDeck:', aiDeck);
+    console.log('shopDeck:', shopDeck);
+
     if (canStart) {
+      console.log('Starting game with config...');
       onStartGame({
         player: {
           hero: selectedHero,
@@ -60,6 +69,8 @@ function HeroSelection({ decks, onStartGame }) {
         },
         shop: shopDeck
       });
+    } else {
+      console.log('Cannot start - missing decks');
     }
   };
 
