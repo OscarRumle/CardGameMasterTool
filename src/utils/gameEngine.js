@@ -701,9 +701,30 @@ function drawCard(state, playerId) {
     };
 
     return logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} drew a card (${hand.length} in hand)`);
-  }
+  } else {
+    // Deck is empty - take mill damage
+    let newState = {
+      ...state,
+      [playerId]: {
+        ...playerState,
+        hero: {
+          ...playerState.hero,
+          currentHealth: playerState.hero.currentHealth - GAME_CONSTANTS.MILL_DAMAGE
+        }
+      }
+    };
 
-  return state;
+    newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} took ${GAME_CONSTANTS.MILL_DAMAGE} mill damage (deck empty)!`);
+
+    // Check win condition
+    if (newState[playerId].hero.currentHealth <= 0) {
+      newState.gameOver = true;
+      newState.winner = playerId === 'player' ? 'ai' : 'player';
+      newState = logAction(newState, `${playerId === 'player' ? 'AI' : 'You'} wins! Opponent decked out.`);
+    }
+
+    return newState;
+  }
 }
 
 /**
@@ -998,28 +1019,14 @@ export function declareBlocker(state, defenderId, blockerId, attackerId) {
     return { error: 'Attacker not found', state };
   }
 
-  // Tap blocker and assign to attacker
-  const newBattlefield = defenderState.zones.battlefield.map(minion => {
-    if (minion.instanceId === blockerId) {
-      return { ...minion, tapped: true };
-    }
-    return minion;
-  });
-
+  // Assign blocker to attacker (blockers do NOT tap when blocking)
   let newState = {
     ...state,
-    [defenderId]: {
-      ...defenderState,
-      zones: {
-        ...defenderState.zones,
-        battlefield: newBattlefield
-      }
-    },
     combat: {
       ...state.combat,
       blockers: {
         ...state.combat.blockers,
-        [attackerId]: { ...blocker, tapped: true }
+        [attackerId]: blocker
       }
     }
   };
@@ -1087,19 +1094,30 @@ export function resolveCombat(state) {
       const damage = attacker.attack || 0;
       newState[defenderId].hero.currentHealth -= damage;
       newState = logAction(newState, `${attacker.name} dealt ${damage} damage to ${defenderId === 'player' ? 'You' : 'AI'}`);
-
-      // Check win condition
-      if (newState[defenderId].hero.currentHealth <= 0) {
-        newState.gameOver = true;
-        newState.winner = attackerId;
-        newState = logAction(newState, `${attackerId === 'player' ? 'You' : 'AI'} wins!`);
-      }
     }
   }
 
   // Process deaths
   newState = processDeaths(newState, attackerId);
   newState = processDeaths(newState, defenderId);
+
+  // Check win condition AFTER all damage (handles simultaneous death)
+  const playerDead = newState.player.hero.currentHealth <= 0;
+  const aiDead = newState.ai.hero.currentHealth <= 0;
+
+  if (playerDead && aiDead) {
+    newState.gameOver = true;
+    newState.winner = 'draw';
+    newState = logAction(newState, 'Both heroes died - DRAW!');
+  } else if (playerDead) {
+    newState.gameOver = true;
+    newState.winner = 'ai';
+    newState = logAction(newState, 'AI wins!');
+  } else if (aiDead) {
+    newState.gameOver = true;
+    newState.winner = 'player';
+    newState = logAction(newState, 'You win!');
+  }
 
   // End combat
   newState.combat = {

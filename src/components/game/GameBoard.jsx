@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking, raiseMinion, sacrificeMinion } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
@@ -206,6 +206,36 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
   };
 
+  const handleRaiseMinion = (minionId) => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = raiseMinion(gameState, 'player', minionId);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
+  const handleSacrificeMinion = (minionId) => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = sacrificeMinion(gameState, 'player', minionId);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
   return (
     <div className="w-full h-screen flex bg-gradient-to-b from-zinc-900 to-black overflow-hidden">
       {/* Error Message */}
@@ -261,6 +291,8 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               combatPhase={gameState.combat.phase}
               selectedBlocker={selectedBlocker}
               onBlockerSelect={handleBlockerSelect}
+              onRaiseMinion={handleRaiseMinion}
+              onSacrificeMinion={handleSacrificeMinion}
             />
           </div>
         </div>
@@ -413,11 +445,35 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion }) {
   const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
+  const isNecromancer = state.hero.name.toLowerCase() === 'necromancer';
 
   return (
     <div className="space-y-3">
+      {/* Necromancer Graveyard */}
+      {isNecromancer && state.zones.graveyard.length > 0 && (
+        <div className="bg-purple-900/20 border-2 border-purple-600 rounded-lg p-3">
+          <div className="text-xs text-purple-400 font-bold mb-2">
+            GRAVEYARD ({state.zones.graveyard.length})
+            {isPlayerTurn && <span className="ml-2 text-amber-500">(Click to Raise)</span>}
+          </div>
+          <div className="flex gap-2 flex-wrap max-h-32 overflow-y-auto">
+            {state.zones.graveyard.map((minion) => (
+              <div key={minion.instanceId} className="relative">
+                <MinionCard
+                  minion={minion}
+                  isOpponent={false}
+                  onClick={() => isPlayerTurn && onRaiseMinion(minion.instanceId)}
+                  clickable={isPlayerTurn}
+                />
+                <div className="absolute inset-0 bg-black/40 rounded-lg pointer-events-none" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Player Battlefield */}
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 min-h-[120px]">
         <div className="text-xs text-zinc-500 mb-2">
@@ -438,20 +494,34 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
               const isBlockerSelected = selectedBlocker === minion.instanceId;
 
               return (
-                <MinionCard
-                  key={minion.instanceId}
-                  minion={minion}
-                  isOpponent={false}
-                  isSelected={isAttacker || isBlockerSelected}
-                  onClick={() => {
-                    if (inBlockingPhase) {
-                      onBlockerSelect(minion.instanceId);
-                    } else if (!combatActive && isPlayerTurn) {
-                      onToggleAttacker(minion.instanceId);
-                    }
-                  }}
-                  clickable={(!combatActive && isPlayerTurn) || inBlockingPhase}
-                />
+                <div key={minion.instanceId} className="relative">
+                  <MinionCard
+                    minion={minion}
+                    isOpponent={false}
+                    isSelected={isAttacker || isBlockerSelected}
+                    onClick={() => {
+                      if (inBlockingPhase) {
+                        onBlockerSelect(minion.instanceId);
+                      } else if (!combatActive && isPlayerTurn) {
+                        onToggleAttacker(minion.instanceId);
+                      }
+                    }}
+                    clickable={(!combatActive && isPlayerTurn) || inBlockingPhase}
+                  />
+                  {/* Necromancer Sacrifice Button */}
+                  {isNecromancer && isPlayerTurn && !combatActive && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSacrificeMinion(minion.instanceId);
+                      }}
+                      className="absolute bottom-1 left-1 right-1 bg-purple-600 text-white text-[8px] font-bold py-0.5 rounded hover:bg-purple-500 transition"
+                      title="Sacrifice for +1 mana"
+                    >
+                      SACRIFICE
+                    </button>
+                  )}
+                </div>
               );
             })
           )}
