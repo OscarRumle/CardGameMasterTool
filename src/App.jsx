@@ -8,6 +8,7 @@ import DeckViewTab from './components/tabs/DeckViewTab';
 import ExportTab from './components/tabs/ExportTab';
 import BalancingTab from './components/tabs/BalancingTab';
 import TextTweaksTab from './components/tabs/TextTweaksTab';
+import SimulatorTab from './components/tabs/SimulatorTab';
 import CreateDeckModal from './components/modals/CreateDeckModal';
 import CustomizeModal from './components/modals/CustomizeModal';
 import DeleteConfirmModal from './components/modals/DeleteConfirmModal';
@@ -223,6 +224,7 @@ function App() {
             {[
               ['home', 'HOME'],
               ['view', 'MY DECKS'],
+              ['simulator', 'SIMULATOR'],
               ['balancing', 'BALANCING'],
               ['text-tweaks', 'TEXT TWEAKS']
             ].map(([tab, label]) => (
@@ -297,6 +299,10 @@ function App() {
             deck1Analysis={deck1Analysis}
             deck2Analysis={deck2Analysis}
           />
+        )}
+
+        {currentTab === 'simulator' && (
+          <SimulatorTab decks={decks} />
         )}
 
         {currentTab === 'text-tweaks' && (
