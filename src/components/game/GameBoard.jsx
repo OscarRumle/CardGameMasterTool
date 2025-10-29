@@ -1,12 +1,89 @@
-import { useState } from 'react';
-import { endTurn } from '../../utils/gameEngine';
+import { useState, useEffect } from 'react';
+import { endTurn, playCard, useHeroPower, useHeroAttack } from '../../utils/gameEngine';
+import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [selectedCard, setSelectedCard] = useState(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const playerState = gameState.player;
   const aiState = gameState.ai;
   const isPlayerTurn = gameState.currentPlayer === 'player';
+
+  // AI takes turn automatically when it's AI's turn
+  useEffect(() => {
+    if (!isPlayerTurn && !gameState.gameOver) {
+      // Add a small delay so the user can see the turn change
+      const timer = setTimeout(() => {
+        console.log('AI is thinking...');
+        const newState = aiTakeTurn(gameState);
+        onStateChange(newState);
+
+        // Check for game over
+        if (newState.gameOver) {
+          onGameOver();
+        }
+      }, 1500); // 1.5 second delay
+
+      return () => clearTimeout(timer);
+    }
+  }, [isPlayerTurn, gameState, onStateChange, onGameOver]);
+
+  const showError = (msg) => {
+    setErrorMessage(msg);
+    setTimeout(() => setErrorMessage(''), 3000);
+  };
+
+  const handlePlayCard = (card) => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = playCard(gameState, 'player', card);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+      setSelectedCard(null);
+    }
+  };
+
+  const handleHeroPower = () => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = useHeroPower(gameState, 'player');
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
+  const handleHeroAttack = () => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = useHeroAttack(gameState, 'player');
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+
+      // Check for game over
+      if (result.state.gameOver) {
+        onGameOver();
+      }
+    }
+  };
 
   const handleEndTurn = () => {
     const newState = endTurn(gameState);
@@ -15,6 +92,13 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
 
   return (
     <div className="w-full h-screen flex bg-gradient-to-b from-zinc-900 to-black overflow-hidden">
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg font-bold animate-pulse">
+          {errorMessage}
+        </div>
+      )}
+
       {/* Main Game Area */}
       <div className="flex-1 flex flex-col">
         {/* Top Section - AI/Opponent */}
@@ -39,6 +123,9 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               isPlayerTurn={isPlayerTurn}
               selectedCard={selectedCard}
               onSelectCard={setSelectedCard}
+              onPlayCard={handlePlayCard}
+              onHeroPower={handleHeroPower}
+              onHeroAttack={handleHeroAttack}
             />
           </div>
         </div>
@@ -131,7 +218,7 @@ function OpponentArea({ state }) {
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack }) {
   return (
     <div className="space-y-3">
       {/* Player Battlefield */}
@@ -150,7 +237,22 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard }) {
 
       {/* Player Hand */}
       <div className="bg-zinc-800/50 border-2 border-amber-600/30 rounded-lg p-3">
-        <div className="text-xs text-amber-500 mb-2 font-bold">YOUR HAND ({state.zones.hand.length})</div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-amber-500 font-bold">YOUR HAND ({state.zones.hand.length})</div>
+          {selectedCard && (
+            <button
+              onClick={() => onPlayCard(selectedCard)}
+              disabled={!isPlayerTurn || state.hero.currentMana < selectedCard.manaCost}
+              className={`px-4 py-1 text-xs font-bold rounded-lg transition
+                ${isPlayerTurn && state.hero.currentMana >= selectedCard.manaCost
+                  ? 'bg-amber-500 text-black hover:bg-amber-400'
+                  : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                }`}
+            >
+              PLAY {selectedCard.name.toUpperCase()}
+            </button>
+          )}
+        </div>
         <div className="flex gap-2 flex-wrap">
           {state.zones.hand.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No cards in hand</div>
@@ -161,6 +263,7 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard }) {
                 card={card}
                 isSelected={selectedCard?.instanceId === card.instanceId}
                 onSelect={() => onSelectCard(card)}
+                onPlay={() => onPlayCard(card)}
                 canPlay={isPlayerTurn && state.hero.currentMana >= card.manaCost}
               />
             ))
@@ -221,11 +324,12 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard }) {
         {/* Hero Abilities */}
         <div className="mt-3 flex gap-2">
           <button
+            onClick={onHeroPower}
             disabled={state.hero.abilitiesUsedThisTurn.heroPower || !isPlayerTurn}
             className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-bold transition
               ${state.hero.abilitiesUsedThisTurn.heroPower || !isPlayerTurn
                 ? 'bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed'
-                : 'bg-purple-900/30 border-purple-600 text-purple-300 hover:bg-purple-800/50'
+                : 'bg-purple-900/30 border-purple-600 text-purple-300 hover:bg-purple-800/50 cursor-pointer'
               }`}
           >
             {state.hero.abilities.heroPower.name} ({state.hero.abilities.heroPower.cost} mana)
@@ -233,11 +337,12 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard }) {
           </button>
 
           <button
+            onClick={onHeroAttack}
             disabled={state.hero.abilitiesUsedThisTurn.attack || !isPlayerTurn}
             className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-bold transition
               ${state.hero.abilitiesUsedThisTurn.attack || !isPlayerTurn
                 ? 'bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed'
-                : 'bg-red-900/30 border-red-600 text-red-300 hover:bg-red-800/50'
+                : 'bg-red-900/30 border-red-600 text-red-300 hover:bg-red-800/50 cursor-pointer'
               }`}
           >
             {state.hero.abilities.attack.name}
@@ -304,10 +409,11 @@ function MinionCard({ minion, isOpponent }) {
 }
 
 // Hand Card Component
-function HandCard({ card, isSelected, onSelect, canPlay }) {
+function HandCard({ card, isSelected, onSelect, onPlay, canPlay }) {
   return (
     <div
       onClick={onSelect}
+      onDoubleClick={() => canPlay && onPlay()}
       className={`relative w-32 h-40 rounded-lg border-2 p-2 cursor-pointer transition-all
         ${isSelected ? 'border-amber-500 -translate-y-2 shadow-lg shadow-amber-500/50' : 'border-zinc-600'}
         ${canPlay ? 'hover:border-amber-400 hover:-translate-y-1' : 'opacity-50'}

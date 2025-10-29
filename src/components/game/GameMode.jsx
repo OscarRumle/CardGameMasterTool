@@ -52,9 +52,73 @@ function GameMode({ decks }) {
         />
       )}
 
-      {gamePhase === 'game-over' && (
-        <div className="text-white text-center p-8">
-          <h1 className="text-3xl font-bold">GAME OVER</h1>
+      {gamePhase === 'game-over' && gameState && (
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-6xl font-bold mb-6">
+              {gameState.winner === 'player' ? (
+                <span className="text-green-400">🎉 VICTORY! 🎉</span>
+              ) : (
+                <span className="text-red-400">💀 DEFEAT 💀</span>
+              )}
+            </h1>
+
+            <p className="text-2xl text-zinc-400 mb-8">
+              {gameState.winner === 'player' ? 'You have defeated the AI!' : 'The AI has defeated you!'}
+            </p>
+
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => {
+                  setGamePhase('hero-select');
+                  setGameState(null);
+                  setGameConfig(null);
+                }}
+                className="px-8 py-4 bg-amber-500 text-black font-bold rounded-lg hover:bg-amber-400 transition"
+              >
+                PLAY AGAIN
+              </button>
+            </div>
+
+            {/* Final Stats */}
+            <div className="mt-12 grid grid-cols-2 gap-8 max-w-2xl mx-auto">
+              <div className="bg-green-900/20 border-2 border-green-700 rounded-lg p-6">
+                <h3 className="text-green-400 font-bold text-xl mb-4">YOUR STATS</h3>
+                <div className="space-y-2 text-left">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Hero:</span>
+                    <span className="text-white">{gameState.player.hero.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Final Health:</span>
+                    <span className="text-white">{gameState.player.hero.currentHealth}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Cards Left:</span>
+                    <span className="text-white">{gameState.player.zones.deck.length}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-red-900/20 border-2 border-red-800 rounded-lg p-6">
+                <h3 className="text-red-400 font-bold text-xl mb-4">AI STATS</h3>
+                <div className="space-y-2 text-left">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Hero:</span>
+                    <span className="text-white">{gameState.ai.hero.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Final Health:</span>
+                    <span className="text-white">{gameState.ai.hero.currentHealth}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-400">Cards Left:</span>
+                    <span className="text-white">{gameState.ai.zones.deck.length}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

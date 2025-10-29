@@ -492,3 +492,336 @@ function performUpkeep(state) {
     }
   };
 }
+
+/**
+ * Play a card from hand
+ */
+export function playCard(state, playerId, card, target = null) {
+  // Validate
+  const validation = canPlayCard(state, playerId, card);
+  if (!validation.valid) {
+    return { error: validation.reason, state };
+  }
+
+  const playerState = state[playerId];
+
+  // Remove card from hand
+  const newHand = playerState.zones.hand.filter(c => c.instanceId !== card.instanceId);
+
+  // Spend mana
+  const newMana = playerState.hero.currentMana - card.manaCost;
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      hero: {
+        ...playerState.hero,
+        currentMana: newMana
+      },
+      zones: {
+        ...playerState.zones,
+        hand: newHand
+      }
+    }
+  };
+
+  // Handle based on card type
+  if (card.cardType === 'minion') {
+    // Play minion to battlefield
+    const minion = {
+      ...card,
+      summoningSickness: true, // Can't attack this turn (unless Prepared)
+      tapped: false,
+      currentHealth: card.health
+    };
+
+    // Check for Prepared keyword
+    if (card.effect && card.effect.toLowerCase().includes('prepared')) {
+      minion.summoningSickness = false;
+    }
+
+    newState[playerId].zones.battlefield = [
+      ...newState[playerId].zones.battlefield,
+      minion
+    ];
+
+    newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} played ${card.name}`);
+
+    // Trigger "when played" effects (like Necromancer's Gain 1 Fury)
+    // For now, we'll handle these manually based on effect text
+    newState = handleCardPlayEffects(newState, playerId, card);
+
+  } else if (card.cardType === 'spell') {
+    // Cast spell - goes to discard
+    newState[playerId].zones.discard = [
+      ...newState[playerId].zones.discard,
+      card
+    ];
+
+    newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} cast ${card.name}`);
+
+    // Apply spell effects
+    newState = applySpellEffects(newState, playerId, card, target);
+
+    // Mage: Increment Arcana when casting spell
+    if (newState[playerId].hero.name.toLowerCase() === 'mage') {
+      newState[playerId].hero.classResource.value += 1;
+      newState[playerId].hero.levelProgress += 1;
+      newState = logAction(newState, `Arcana: ${newState[playerId].hero.classResource.value}`);
+    }
+  }
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Handle card play effects (minion enters battlefield)
+ */
+function handleCardPlayEffects(state, playerId, card) {
+  let newState = { ...state };
+  const effect = (card.effect || '').toLowerCase();
+
+  // Barbarian: Gain Fury effects
+  if (newState[playerId].hero.name.toLowerCase() === 'barbarian' && effect.includes('gain') && effect.includes('fury')) {
+    const match = effect.match(/gain (\d+) fury/);
+    if (match) {
+      const furyGain = parseInt(match[1]);
+      const currentFury = newState[playerId].hero.classResource.value;
+      const maxFury = newState[playerId].hero.classResource.max;
+      newState[playerId].hero.classResource.value = Math.min(currentFury + furyGain, maxFury);
+      newState = logAction(newState, `Gained ${furyGain} Fury (now ${newState[playerId].hero.classResource.value})`);
+    }
+  }
+
+  return newState;
+}
+
+/**
+ * Apply spell effects (basic implementation)
+ */
+function applySpellEffects(state, playerId, spell, target) {
+  let newState = { ...state };
+  const effect = (spell.effect || '').toLowerCase();
+
+  // Deal damage effects
+  if (effect.includes('deal') && effect.includes('damage')) {
+    const damageMatch = effect.match(/deal (\d+) damage/);
+    if (damageMatch) {
+      const damage = parseInt(damageMatch[1]);
+      // For now, just log it - full targeting system comes later
+      newState = logAction(newState, `${spell.name} deals ${damage} damage`);
+    }
+  }
+
+  // Draw card effects
+  if (effect.includes('draw')) {
+    const drawMatch = effect.match(/draw (\d+)/);
+    if (drawMatch) {
+      const drawCount = parseInt(drawMatch[1]);
+      for (let i = 0; i < drawCount; i++) {
+        newState = drawCard(newState, playerId);
+      }
+    }
+  }
+
+  return newState;
+}
+
+/**
+ * Draw a card for a player
+ */
+function drawCard(state, playerId) {
+  const playerState = state[playerId];
+  const deck = [...playerState.zones.deck];
+  const hand = [...playerState.zones.hand];
+
+  if (deck.length > 0) {
+    const drawnCard = deck.shift();
+    hand.push(drawnCard);
+
+    const newState = {
+      ...state,
+      [playerId]: {
+        ...playerState,
+        zones: {
+          ...playerState.zones,
+          deck,
+          hand
+        }
+      }
+    };
+
+    return logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} drew a card (${hand.length} in hand)`);
+  }
+
+  return state;
+}
+
+/**
+ * Use Hero Power
+ */
+export function useHeroPower(state, playerId) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (state.phase !== 'main') {
+    return { error: 'Can only use hero power during main phase', state };
+  }
+
+  if (playerState.hero.abilitiesUsedThisTurn.heroPower) {
+    return { error: 'Hero power already used this turn', state };
+  }
+
+  const powerCost = playerState.hero.abilities.heroPower.cost;
+  if (playerState.hero.currentMana < powerCost) {
+    return { error: 'Not enough mana', state };
+  }
+
+  // Apply hero power effect based on hero
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      hero: {
+        ...playerState.hero,
+        currentMana: playerState.hero.currentMana - powerCost,
+        abilitiesUsedThisTurn: {
+          ...playerState.hero.abilitiesUsedThisTurn,
+          heroPower: true
+        }
+      }
+    }
+  };
+
+  const heroName = playerState.hero.name.toLowerCase();
+
+  switch (heroName) {
+    case 'necromancer':
+      // Dark Pact: Sacrifice 2 HP, Draw a card
+      newState[playerId].hero.currentHealth -= 2;
+      newState = drawCard(newState, playerId);
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Dark Pact (sacrificed 2 HP, drew a card)`);
+      break;
+
+    case 'barbarian':
+      // Battle Fury: Gain 2 Fury
+      newState[playerId].hero.classResource.value = Math.min(
+        newState[playerId].hero.classResource.value + 2,
+        newState[playerId].hero.classResource.max
+      );
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Battle Fury (Fury: ${newState[playerId].hero.classResource.value})`);
+      break;
+
+    case 'mage':
+      // Arcane Surge: Gain 1 Arcana, draw if >= 5
+      newState[playerId].hero.classResource.value += 1;
+      const arcana = newState[playerId].hero.classResource.value;
+      if (arcana >= 5) {
+        newState = drawCard(newState, playerId);
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Arcane Surge (Arcana: ${arcana}, drew a card)`);
+      } else {
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Arcane Surge (Arcana: ${arcana})`);
+      }
+      break;
+
+    case 'rogue':
+      // Shadow Step: Enter Stealth
+      newState[playerId].hero.classResource.value = true;
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Shadow Step (Stealthed)`);
+      break;
+
+    default:
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Hero Power`);
+  }
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Use Hero Attack (basic implementation)
+ */
+export function useHeroAttack(state, playerId, target) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (state.phase !== 'main') {
+    return { error: 'Can only attack during main phase', state };
+  }
+
+  if (playerState.hero.abilitiesUsedThisTurn.attack) {
+    return { error: 'Hero attack already used this turn', state };
+  }
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      hero: {
+        ...playerState.hero,
+        abilitiesUsedThisTurn: {
+          ...playerState.hero.abilitiesUsedThisTurn,
+          attack: true
+        }
+      }
+    }
+  };
+
+  const heroName = playerState.hero.name.toLowerCase();
+  const damage = playerState.hero.abilities.attack.damage;
+
+  // For now, just deal damage to opponent hero
+  const opponentId = playerId === 'player' ? 'ai' : 'player';
+
+  switch (heroName) {
+    case 'necromancer':
+    case 'mage':
+      // Simple 1 damage attack
+      newState[opponentId].hero.currentHealth -= damage;
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} attacked for ${damage} damage`);
+      break;
+
+    case 'barbarian':
+      // Fury Strike: Deal damage equal to Fury, reset Fury
+      const furyDamage = newState[playerId].hero.classResource.value;
+      if (furyDamage > 0) {
+        newState[opponentId].hero.currentHealth -= furyDamage;
+        newState[playerId].hero.classResource.value = 0;
+        newState[playerId].hero.levelProgress += furyDamage;
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Fury Strike for ${furyDamage} damage (Fury reset to 0)`);
+      } else {
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} has no Fury to attack with`);
+      }
+      break;
+
+    case 'rogue':
+      // Quick Strike: 1 damage, 2x if stealthed
+      const isStealthed = newState[playerId].hero.classResource.value;
+      const rogueDamage = isStealthed ? damage * 2 : damage;
+      newState[opponentId].hero.currentHealth -= rogueDamage;
+      if (isStealthed) {
+        newState[playerId].hero.classResource.value = false; // Break stealth
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} attacked from Stealth for ${rogueDamage} damage (Stealth broken)`);
+      } else {
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} attacked for ${rogueDamage} damage`);
+      }
+      break;
+  }
+
+  // Check for win condition
+  if (newState[opponentId].hero.currentHealth <= 0) {
+    newState.gameOver = true;
+    newState.winner = playerId;
+    newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} wins!`);
+  }
+
+  return { state: newState, error: null };
+}
