@@ -60,6 +60,7 @@ export function initializeGame(gameConfig) {
     // Combat (temporary)
     combat: {
       active: false,
+      phase: null, // 'attacking' or 'blocking'
       attackers: [],
       blockers: {},
       damageOrder: {}
@@ -953,6 +954,7 @@ export function declareAttackers(state, playerId, attackerIds) {
     },
     combat: {
       active: true,
+      phase: 'blocking', // Move to blocking phase
       attackers: attackers.map(a => ({ ...a, tapped: true })),
       blockers: {},
       damageOrder: {}
@@ -1102,12 +1104,29 @@ export function resolveCombat(state) {
   // End combat
   newState.combat = {
     active: false,
+    phase: null,
     attackers: [],
     blockers: {},
     damageOrder: {}
   };
 
   return { state: newState, error: null };
+}
+
+/**
+ * Skip blocking phase and go straight to damage
+ */
+export function skipBlocking(state) {
+  if (!state.combat.active) {
+    return { error: 'No combat in progress', state };
+  }
+
+  if (state.combat.phase !== 'blocking') {
+    return { error: 'Not in blocking phase', state };
+  }
+
+  // Just resolve combat immediately
+  return resolveCombat(state);
 }
 
 /**

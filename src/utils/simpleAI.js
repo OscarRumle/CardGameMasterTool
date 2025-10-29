@@ -1,5 +1,5 @@
 // Simple AI - Makes basic legal moves
-import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, purchaseEquipment, GAME_CONSTANTS } from './gameEngine';
+import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, purchaseEquipment, declareBlocker, skipBlocking, GAME_CONSTANTS } from './gameEngine';
 
 /**
  * AI takes its turn
@@ -109,14 +109,51 @@ export function aiTakeTurn(initialState) {
     }
   }
 
-  // Resolve combat if active
-  if (state.combat.active) {
-    console.log('AI resolving combat');
-    const combatResult = resolveCombat(state);
+  // Handle blocking if being attacked
+  if (state.combat.active && state.combat.phase === 'blocking' && state.currentPlayer !== 'ai') {
+    console.log('AI is being attacked, making blocking decisions');
 
-    if (!combatResult.error) {
-      state = combatResult.state;
-      console.log('Combat resolved');
+    // Get available blockers (untapped minions)
+    const availableBlockers = state.ai.zones.battlefield.filter(minion => !minion.tapped);
+
+    // Sort attackers by attack power (block biggest threats)
+    const sortedAttackers = [...state.combat.attackers].sort((a, b) => (b.attack || 0) - (a.attack || 0));
+
+    // Assign blockers to biggest attackers
+    for (const attacker of sortedAttackers) {
+      if (availableBlockers.length === 0) break;
+
+      // Skip if already blocked
+      if (state.combat.blockers[attacker.instanceId]) continue;
+
+      // Find a suitable blocker (prefer minions that can survive or trade favorably)
+      const blocker = availableBlockers.find(minion => {
+        const minionHealth = minion.currentHealth || minion.health;
+        const attackerDamage = attacker.attack || 0;
+        // Block if we can survive OR if we're going to die anyway (trade)
+        return minionHealth > attackerDamage || minionHealth <= attackerDamage;
+      });
+
+      if (blocker) {
+        const blockResult = declareBlocker(state, 'ai', blocker.instanceId, attacker.instanceId);
+        if (!blockResult.error) {
+          state = blockResult.state;
+          console.log(`AI blocked ${attacker.name} with ${blocker.name}`);
+
+          // Remove blocker from available list
+          const blockerIndex = availableBlockers.findIndex(m => m.instanceId === blocker.instanceId);
+          if (blockerIndex !== -1) {
+            availableBlockers.splice(blockerIndex, 1);
+          }
+        }
+      }
+    }
+
+    // Done blocking, resolve combat
+    const skipResult = skipBlocking(state);
+    if (!skipResult.error) {
+      state = skipResult.state;
+      console.log('AI finished blocking, combat resolved');
     }
   }
 

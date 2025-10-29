@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [selectedCard, setSelectedCard] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedAttackers, setSelectedAttackers] = useState([]);
+  const [selectedBlocker, setSelectedBlocker] = useState(null);
+  const [targetAttacker, setTargetAttacker] = useState(null);
 
   const playerState = gameState.player;
   const aiState = gameState.ai;
@@ -164,6 +166,46 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
   };
 
+  const handleBlockerSelect = (minionId) => {
+    // If in blocking phase and it's opponent's turn (being attacked)
+    if (gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn) {
+      setSelectedBlocker(minionId);
+      setTargetAttacker(null); // Reset attacker selection
+    }
+  };
+
+  const handleAttackerSelect = (attackerId) => {
+    // If we have a blocker selected, assign the block
+    if (selectedBlocker && gameState.combat.active && gameState.combat.phase === 'blocking') {
+      const result = declareBlocker(gameState, 'player', selectedBlocker, attackerId);
+
+      if (result.error) {
+        showError(result.error);
+      } else {
+        onStateChange(result.state);
+        setSelectedBlocker(null);
+        setTargetAttacker(null);
+      }
+    }
+  };
+
+  const handleSkipBlocking = () => {
+    const result = skipBlocking(gameState);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+      setSelectedBlocker(null);
+      setTargetAttacker(null);
+
+      // Check for game over
+      if (result.state.gameOver) {
+        onGameOver();
+      }
+    }
+  };
+
   return (
     <div className="w-full h-screen flex bg-gradient-to-b from-zinc-900 to-black overflow-hidden">
       {/* Error Message */}
@@ -178,7 +220,13 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         {/* Top Section - AI/Opponent */}
         <div className="border-b-2 border-zinc-700 bg-zinc-900/50 p-4">
           <div className="max-w-7xl mx-auto">
-            <OpponentArea state={aiState} />
+            <OpponentArea
+              state={aiState}
+              combat={gameState.combat}
+              isPlayerTurn={isPlayerTurn}
+              selectedBlocker={selectedBlocker}
+              onAttackerSelect={handleAttackerSelect}
+            />
           </div>
         </div>
 
@@ -210,6 +258,9 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               selectedAttackers={selectedAttackers}
               onToggleAttacker={handleToggleAttacker}
               combatActive={gameState.combat.active}
+              combatPhase={gameState.combat.phase}
+              selectedBlocker={selectedBlocker}
+              onBlockerSelect={handleBlockerSelect}
             />
           </div>
         </div>
@@ -229,18 +280,19 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               </div>
               {gameState.combat.active && (
                 <div className="text-red-500 font-bold animate-pulse">
-                  ⚔️ COMBAT ACTIVE
+                  ⚔️ {gameState.combat.phase === 'blocking' ? 'BLOCKING PHASE' : 'COMBAT ACTIVE'}
                 </div>
               )}
             </div>
 
             <div className="flex gap-2">
-              {gameState.combat.active && isPlayerTurn && (
+              {/* Blocking phase - defender can block or skip */}
+              {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
                 <button
-                  onClick={handleResolveCombat}
-                  className="px-6 py-3 font-bold rounded-lg bg-red-600 text-white hover:bg-red-500 hover:scale-105 transition-all"
+                  onClick={handleSkipBlocking}
+                  className="px-6 py-3 font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-500 hover:scale-105 transition-all"
                 >
-                  RESOLVE COMBAT
+                  NO BLOCKS / RESOLVE
                 </button>
               )}
 
@@ -278,7 +330,9 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
 }
 
 // Opponent Area Component
-function OpponentArea({ state }) {
+function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttackerSelect }) {
+  const inBlockingPhase = combat.active && combat.phase === 'blocking' && !isPlayerTurn;
+
   return (
     <div className="space-y-3">
       {/* AI Hero Info */}
@@ -309,6 +363,38 @@ function OpponentArea({ state }) {
         </div>
       </div>
 
+      {/* Attackers Display (during blocking phase) */}
+      {inBlockingPhase && combat.attackers.length > 0 && (
+        <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-3">
+          <div className="text-xs text-red-400 font-bold mb-2">
+            ATTACKING YOU ({combat.attackers.length} attackers)
+            {selectedBlocker && <span className="ml-2 text-amber-400">- Click attacker to block</span>}
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {combat.attackers.map((attacker) => {
+              const isBlocked = combat.blockers[attacker.instanceId];
+              return (
+                <div key={attacker.instanceId} className="relative">
+                  <MinionCard
+                    minion={attacker}
+                    isOpponent={true}
+                    onClick={() => selectedBlocker && onAttackerSelect(attacker.instanceId)}
+                    clickable={selectedBlocker !== null}
+                  />
+                  {isBlocked && (
+                    <div className="absolute -bottom-2 left-0 right-0 text-center">
+                      <div className="bg-blue-600 text-white text-[8px] font-bold px-1 py-0.5 rounded">
+                        BLOCKED
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* AI Battlefield */}
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 min-h-[120px]">
         <div className="text-xs text-zinc-500 mb-2">OPPONENT BATTLEFIELD</div>
@@ -327,7 +413,9 @@ function OpponentArea({ state }) {
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack, selectedAttackers, onToggleAttacker, combatActive }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect }) {
+  const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
+
   return (
     <div className="space-y-3">
       {/* Player Battlefield */}
@@ -337,21 +425,35 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
           {!combatActive && isPlayerTurn && state.zones.battlefield.length > 0 && (
             <span className="ml-2 text-amber-500">(Click minions to select attackers)</span>
           )}
+          {inBlockingPhase && state.zones.battlefield.length > 0 && (
+            <span className="ml-2 text-blue-400">(Click minion, then click attacker to block)</span>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
           {state.zones.battlefield.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No minions</div>
           ) : (
-            state.zones.battlefield.map((minion) => (
-              <MinionCard
-                key={minion.instanceId}
-                minion={minion}
-                isOpponent={false}
-                isSelected={selectedAttackers.includes(minion.instanceId)}
-                onClick={() => onToggleAttacker(minion.instanceId)}
-                clickable={!combatActive && isPlayerTurn}
-              />
-            ))
+            state.zones.battlefield.map((minion) => {
+              const isAttacker = selectedAttackers.includes(minion.instanceId);
+              const isBlockerSelected = selectedBlocker === minion.instanceId;
+
+              return (
+                <MinionCard
+                  key={minion.instanceId}
+                  minion={minion}
+                  isOpponent={false}
+                  isSelected={isAttacker || isBlockerSelected}
+                  onClick={() => {
+                    if (inBlockingPhase) {
+                      onBlockerSelect(minion.instanceId);
+                    } else if (!combatActive && isPlayerTurn) {
+                      onToggleAttacker(minion.instanceId);
+                    }
+                  }}
+                  clickable={(!combatActive && isPlayerTurn) || inBlockingPhase}
+                />
+              );
+            })
           )}
         </div>
       </div>
