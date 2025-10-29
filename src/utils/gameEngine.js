@@ -3,7 +3,7 @@
 
 // Game Constants
 export const GAME_CONSTANTS = {
-  STARTING_HEALTH: 30,
+  STARTING_HEALTH: 25,
   MAX_MANA: 10,
   FIRST_PLAYER_STARTING_MANA: 1,
   SECOND_PLAYER_STARTING_MANA: 2,
@@ -16,7 +16,7 @@ export const GAME_CONSTANTS = {
   ROGUE_LEVEL_THRESHOLD: 15,
   MAGE_ECHO_ZONE_MAX: 3,
   SHOP_SIZE: 5,
-  SHOP_REFRESH_ROUNDS: [5, 9],
+  SHOP_REFRESH_ROUNDS: [5, 8],
   DARK_PACT_HP_COST: 2,
   MILL_DAMAGE: 1
 };
@@ -1475,52 +1475,3 @@ export function refreshShop(state) {
   return state;
 }
 
-/**
- * Reroll shop (replace all items with new ones from current tier)
- */
-export function rerollShop(state, playerId) {
-  const playerState = state[playerId];
-
-  // Validate
-  if (state.currentPlayer !== playerId) {
-    return { error: 'Not your turn', state };
-  }
-
-  // Cost 1 gold to reroll
-  if (playerState.hero.gold < 1) {
-    return { error: 'Not enough gold to reroll (costs 1 gold)', state };
-  }
-
-  const currentTier = state.shop.currentTier;
-  const deckKey = currentTier === 'early' ? 'earlyDeck' : currentTier === 'mid' ? 'midDeck' : 'lateDeck';
-
-  // Return current market to deck and shuffle
-  const returnedItems = [...state.shop.market];
-  const deck = shuffleDeck([...state.shop[deckKey], ...returnedItems]);
-
-  // Draw new market
-  const newMarket = [];
-  for (let i = 0; i < GAME_CONSTANTS.SHOP_SIZE && deck.length > 0; i++) {
-    newMarket.push(deck.shift());
-  }
-
-  let newState = {
-    ...state,
-    [playerId]: {
-      ...playerState,
-      hero: {
-        ...playerState.hero,
-        gold: playerState.hero.gold - 1
-      }
-    },
-    shop: {
-      ...state.shop,
-      market: newMarket,
-      [deckKey]: deck
-    }
-  };
-
-  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} rerolled the shop for 1 gold`);
-
-  return { state: newState, error: null };
-}
