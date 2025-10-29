@@ -3,7 +3,7 @@
 
 // Game Constants
 export const GAME_CONSTANTS = {
-  STARTING_HEALTH: 30,
+  STARTING_HEALTH: 25,
   MAX_MANA: 10,
   FIRST_PLAYER_STARTING_MANA: 1,
   SECOND_PLAYER_STARTING_MANA: 2,
@@ -16,7 +16,7 @@ export const GAME_CONSTANTS = {
   ROGUE_LEVEL_THRESHOLD: 15,
   MAGE_ECHO_ZONE_MAX: 3,
   SHOP_SIZE: 5,
-  SHOP_REFRESH_ROUNDS: [5, 9],
+  SHOP_REFRESH_ROUNDS: [5, 8],
   DARK_PACT_HP_COST: 2,
   MILL_DAMAGE: 1,
   MAX_ACTION_LOG_ENTRIES: 100, // Prevent memory leak from unbounded log growth
@@ -129,8 +129,8 @@ function createHeroState(heroName, startMana) {
       relic: null
     },
     abilities: {
-      heroPower: getHeroPowerForHero(heroName),
-      attack: getHeroAttackForHero(heroName)
+      heroPower: getHeroPowerForHero(heroName, false),
+      attack: getHeroAttackForHero(heroName, false)
     },
     abilitiesUsedThisTurn: {
       heroPower: false,
@@ -194,69 +194,140 @@ function createHeroState(heroName, startMana) {
 /**
  * Get hero power for a hero
  */
-function getHeroPowerForHero(heroName) {
+function getHeroPowerForHero(heroName, isUpgraded = false) {
   const heroPowers = {
-    necromancer: {
-      name: 'Dark Pact',
-      cost: 2,
-      description: 'Sacrifice 2 HP: Draw a card'
-    },
     barbarian: {
-      name: 'Battle Fury',
-      cost: 1,
-      description: 'Gain 2 Fury'
+      base: {
+        name: 'War Cry',
+        cost: 1,
+        description: 'Gain 2 Armor'
+      },
+      upgraded: {
+        name: 'Berserker\'s Roar',
+        cost: 1,
+        description: 'Gain 2 Armor and 1 Fury'
+      }
     },
     mage: {
-      name: 'Arcane Surge',
-      cost: 1,
-      description: 'Gain 1 Arcana. Draw a card if Arcana >= 5'
+      base: {
+        name: 'Arcane Focus',
+        cost: 1,
+        description: 'Gain 1 Arcana'
+      },
+      upgraded: {
+        name: 'Arcane Mastery',
+        cost: 1,
+        description: 'Gain 1 Arcana and draw a card'
+      }
+    },
+    necromancer: {
+      base: {
+        name: 'Soul Harvest',
+        cost: 1,
+        description: 'Sacrifice 2: Draw a card'
+      },
+      upgraded: {
+        name: 'Unholy Empowerment',
+        cost: 1,
+        description: 'Sacrifice 2: Draw a card. If you sacrificed a minion, gain 1 Health'
+      }
     },
     rogue: {
-      name: 'Shadow Step',
-      cost: 2,
-      description: 'Enter Stealth'
+      base: {
+        name: 'Shadowstep',
+        cost: 1,
+        description: 'Enter Stealth'
+      },
+      upgraded: {
+        name: 'Calculated Strike',
+        cost: 1,
+        description: 'Enter Stealth and deal 1 damage to target enemy minion'
+      }
     }
   };
 
-  return heroPowers[heroName.toLowerCase()] || {
-    name: 'Hero Power',
-    cost: 2,
-    description: 'Default hero power'
-  };
+  const heroKey = heroName.toLowerCase();
+  const heroPowerSet = heroPowers[heroKey];
+
+  if (!heroPowerSet) {
+    return {
+      name: 'Hero Power',
+      cost: 1,
+      description: 'Default hero power'
+    };
+  }
+
+  return isUpgraded ? heroPowerSet.upgraded : heroPowerSet.base;
 }
 
 /**
  * Get hero attack for a hero
+ * All heroes have the same base attack: Cost 2 mana, deal weapon damage, take damage back
  */
-function getHeroAttackForHero(heroName) {
+function getHeroAttackForHero(heroName, isUpgraded = false) {
   const heroAttacks = {
-    necromancer: {
-      name: 'Life Drain',
-      damage: 1,
-      description: 'Deal 1 damage to target'
-    },
     barbarian: {
-      name: 'Fury Strike',
-      damage: 0,
-      description: 'Deal damage equal to Fury, then reset Fury to 0'
+      base: {
+        name: 'Weapon Strike',
+        cost: 2,
+        description: 'Deal weapon damage to target. Take damage back. When you use this, spend ALL Fury for bonus damage'
+      },
+      upgraded: {
+        name: 'Devastating Blow',
+        cost: 2,
+        description: 'Deal (weapon + Fury) to target. Take damage back. 5+ Fury: This costs 0 instead'
+      }
     },
     mage: {
-      name: 'Arcane Bolt',
-      damage: 1,
-      description: 'Deal 1 damage to target'
+      base: {
+        name: 'Arcane Blast',
+        cost: 2,
+        description: 'Deal weapon damage to target. Take damage back.'
+      },
+      upgraded: {
+        name: 'Empowered Blast',
+        cost: 2,
+        description: 'Deal weapon damage +1 to target. Take damage back. 5+ Arcana: This costs 0 instead'
+      }
+    },
+    necromancer: {
+      base: {
+        name: 'Deathtouch',
+        cost: 2,
+        description: 'Deal weapon damage to target. Take damage back. If target dies, Raise 1 minion (2-cost or less)'
+      },
+      upgraded: {
+        name: 'Reaper\'s Touch',
+        cost: 2,
+        description: 'Deal weapon damage +1 to target. Take damage back. If target dies, Raise 1 minion (3-cost or less)'
+      }
     },
     rogue: {
-      name: 'Quick Strike',
-      damage: 1,
-      description: 'Deal 1 damage. Deals 2x while Stealthed'
+      base: {
+        name: 'Blade Strike',
+        cost: 2,
+        description: 'Deal weapon damage to target. Take damage back. (Taking damage from enemy hero attacks breaks your Stealth)'
+      },
+      upgraded: {
+        name: 'Assassin\'s Strike',
+        cost: 2,
+        description: 'Deal weapon damage +1 to target. If you kill target, don\'t take damage back. Stealth: Cost 0 instead'
+      }
     }
   };
 
-  return heroAttacks[heroName.toLowerCase()] || {
-    name: 'Attack',
-    damage: 1,
-    description: 'Deal 1 damage'
-  };
+  const heroKey = heroName.toLowerCase();
+  const heroAttackSet = heroAttacks[heroKey];
+
+  if (!heroAttackSet) {
+    return {
+      name: 'Attack',
+      cost: 2,
+      description: 'Deal weapon damage to target. Take damage back.'
+    };
+  }
+
+  return isUpgraded ? heroAttackSet.upgraded : heroAttackSet.base;
 }
 
 /**
@@ -621,9 +692,13 @@ export function playCard(state, playerId, card, target = null) {
       if (!newState[playerId].hero.leveled) {
         newState[playerId].hero.levelProgress += 1;
 
-        // Check level-up condition
+        // Check level-up condition (Cast 15 spells)
         if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.MAGE_LEVEL_THRESHOLD) {
           newState[playerId].hero.leveled = true;
+          // Upgrade abilities
+          const heroName = newState[playerId].hero.name;
+          newState[playerId].hero.abilities.heroPower = getHeroPowerForHero(heroName, true);
+          newState[playerId].hero.abilities.attack = getHeroAttackForHero(heroName, true);
           newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
         }
       }
@@ -778,7 +853,7 @@ function drawCard(state, playerId) {
 /**
  * Use Hero Power
  */
-export function useHeroPower(state, playerId) {
+export function useHeroPower(state, playerId, target = null) {
   const playerState = state[playerId];
 
   // Validate
@@ -816,45 +891,96 @@ export function useHeroPower(state, playerId) {
   };
 
   const heroName = playerState.hero.name.toLowerCase();
+  const isUpgraded = playerState.hero.leveled;
 
   switch (heroName) {
-    case 'necromancer':
-      // Dark Pact: Sacrifice 2 HP, Draw a card
-      // Check if player has enough HP to sacrifice
-      if (newState[playerId].hero.currentHealth <= GAME_CONSTANTS.DARK_PACT_HP_COST) {
-        return { error: 'Not enough health to sacrifice', state };
-      }
-
-      newState[playerId].hero.currentHealth -= GAME_CONSTANTS.DARK_PACT_HP_COST;
-      newState = drawCard(newState, playerId);
-      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Dark Pact (sacrificed ${GAME_CONSTANTS.DARK_PACT_HP_COST} HP, drew a card)`);
-      break;
-
     case 'barbarian':
-      // Battle Fury: Gain 2 Fury
-      newState[playerId].hero.classResource.value = Math.min(
-        newState[playerId].hero.classResource.value + 2,
-        newState[playerId].hero.classResource.max
+      // Base: War Cry - Gain 2 Armor
+      // Upgraded: Berserker's Roar - Gain 2 Armor and 1 Fury
+      const newArmor = Math.min(
+        newState[playerId].hero.currentArmor + 2,
+        10 // Max armor is 10
       );
-      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Battle Fury (Fury: ${newState[playerId].hero.classResource.value})`);
+      newState[playerId].hero.currentArmor = newArmor;
+
+      if (isUpgraded) {
+        // Also gain 1 Fury
+        newState[playerId].hero.classResource.value = Math.min(
+          newState[playerId].hero.classResource.value + 1,
+          newState[playerId].hero.classResource.max
+        );
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Berserker's Roar (Armor: ${newArmor}, Fury: ${newState[playerId].hero.classResource.value})`);
+      } else {
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used War Cry (Armor: ${newArmor})`);
+      }
       break;
 
     case 'mage':
-      // Arcane Surge: Gain 1 Arcana, draw if >= 5
+      // Base: Arcane Focus - Gain 1 Arcana
+      // Upgraded: Arcane Mastery - Gain 1 Arcana and draw a card
       newState[playerId].hero.classResource.value += 1;
       const arcana = newState[playerId].hero.classResource.value;
-      if (arcana >= 5) {
+
+      if (isUpgraded) {
         newState = drawCard(newState, playerId);
-        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Arcane Surge (Arcana: ${arcana}, drew a card)`);
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Arcane Mastery (Arcana: ${arcana}, drew a card)`);
       } else {
-        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Arcane Surge (Arcana: ${arcana})`);
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Arcane Focus (Arcana: ${arcana})`);
+      }
+      break;
+
+    case 'necromancer':
+      // Base: Soul Harvest - Sacrifice 2: Draw a card
+      // Upgraded: Unholy Empowerment - Sacrifice 2: Draw a card. If you sacrificed a minion, gain 1 Health
+      // Sacrifice means: Pay 2 HP OR kill a minion with health >= 2
+      // For now, just pay 2 HP (minion sacrifice would need UI)
+      if (newState[playerId].hero.currentHealth <= 2) {
+        return { error: 'Not enough health to sacrifice', state };
+      }
+
+      newState[playerId].hero.currentHealth -= 2;
+      newState = drawCard(newState, playerId);
+
+      if (isUpgraded) {
+        // TODO: If sacrificed a minion, gain 1 Health (need UI for minion selection)
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Unholy Empowerment (sacrificed 2 HP, drew a card)`);
+      } else {
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Soul Harvest (sacrificed 2 HP, drew a card)`);
       }
       break;
 
     case 'rogue':
-      // Shadow Step: Enter Stealth
+      // Base: Shadowstep - Enter Stealth
+      // Upgraded: Calculated Strike - Enter Stealth and deal 1 damage to target enemy minion
       newState[playerId].hero.classResource.value = true;
-      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Shadow Step (Stealthed)`);
+
+      if (isUpgraded && target) {
+        // Deal 1 damage to target enemy minion
+        const opponentId = playerId === 'player' ? 'ai' : 'player';
+        const targetMinion = newState[opponentId].zones.battlefield.find(m => m.instanceId === target);
+
+        if (targetMinion) {
+          const newBattlefield = newState[opponentId].zones.battlefield.map(m => {
+            if (m.instanceId === target) {
+              const newHealth = m.currentHealth - 1;
+              return { ...m, currentHealth: newHealth };
+            }
+            return m;
+          }).filter(m => m.currentHealth > 0); // Remove dead minions
+
+          newState[opponentId].zones.battlefield = newBattlefield;
+
+          // If minion died, move to discard and give bounty
+          if (!newBattlefield.find(m => m.instanceId === target)) {
+            newState[opponentId].zones.discard.push(targetMinion);
+            newState[playerId].hero.gold += targetMinion.bounty || 0;
+          }
+        }
+
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Calculated Strike (Stealthed, dealt 1 damage)`);
+      } else {
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Shadowstep (Stealthed)`);
+      }
       break;
 
     default:
@@ -865,10 +991,15 @@ export function useHeroPower(state, playerId) {
 }
 
 /**
- * Use Hero Attack (basic implementation)
+ * Use Hero Attack - Universal attack ability for all heroes
+ * Cost: 2 mana (or 0 under certain conditions)
+ * Target: enemy minion OR enemy hero
+ * Deal weapon damage (base 2 + equipment + bonuses)
+ * Take damage back equal to target's attack (minion) or weapon (hero)
  */
 export function useHeroAttack(state, playerId, target) {
   const playerState = state[playerId];
+  const opponentId = playerId === 'player' ? 'ai' : 'player';
 
   // Validate
   if (state.currentPlayer !== playerId) {
@@ -883,12 +1014,79 @@ export function useHeroAttack(state, playerId, target) {
     return { error: 'Hero attack already used this turn', state };
   }
 
+  // Default to targeting enemy hero if no target specified (for backward compatibility)
+  if (!target) {
+    target = 'hero';
+  }
+
+  const heroName = playerState.hero.name.toLowerCase();
+  const isUpgraded = playerState.hero.leveled;
+
+  // Determine target type and get target data
+  let targetType = 'hero'; // 'hero' or 'minion'
+  let targetMinion = null;
+
+  if (target !== 'hero') {
+    // Try to find minion target
+    targetMinion = state[opponentId].zones.battlefield.find(m => m.instanceId === target);
+    if (!targetMinion) {
+      return { error: 'Invalid target', state };
+    }
+    targetType = 'minion';
+  }
+
+  // Calculate attack cost (base 2, but some heroes get 0 cost)
+  let attackCost = 2;
+
+  if (isUpgraded) {
+    if (heroName === 'barbarian' && playerState.hero.classResource.value >= 5) {
+      attackCost = 0; // Devastating Blow at 5+ Fury
+    } else if (heroName === 'mage' && playerState.hero.classResource.value >= 5) {
+      attackCost = 0; // Empowered Blast at 5+ Arcana
+    } else if (heroName === 'rogue' && playerState.hero.classResource.value === true) {
+      attackCost = 0; // Assassin's Strike while Stealthed
+    }
+  }
+
+  // Check mana
+  if (playerState.hero.currentMana < attackCost) {
+    return { error: 'Not enough mana', state };
+  }
+
+  // Calculate weapon damage
+  let weaponDamage = playerState.hero.weaponDamage; // Base 2 + equipment bonuses
+  let furyBonus = 0;
+
+  // Add hero-specific bonuses
+  if (heroName === 'barbarian') {
+    furyBonus = playerState.hero.classResource.value; // Add ALL Fury
+    weaponDamage += furyBonus;
+
+    // If leveled, add Armor to damage
+    if (isUpgraded && playerState.hero.leveled) {
+      const armorBonus = playerState.hero.currentArmor;
+      weaponDamage += armorBonus;
+    }
+  } else if (isUpgraded) {
+    // Mage and Necromancer get +1 when upgraded
+    if (heroName === 'mage' || heroName === 'necromancer') {
+      weaponDamage += 1;
+    } else if (heroName === 'rogue') {
+      weaponDamage += 1;
+    }
+  }
+
+  // Apply damage to target
+  let targetDied = false;
+  let damageBack = 0;
+
   let newState = {
     ...state,
     [playerId]: {
       ...playerState,
       hero: {
         ...playerState.hero,
+        currentMana: playerState.hero.currentMana - attackCost,
         abilitiesUsedThisTurn: {
           ...playerState.hero.abilitiesUsedThisTurn,
           attack: true
@@ -897,63 +1095,91 @@ export function useHeroAttack(state, playerId, target) {
     }
   };
 
-  const heroName = playerState.hero.name.toLowerCase();
-  const damage = playerState.hero.abilities.attack.damage;
+  if (targetType === 'hero') {
+    // Attack opponent hero
+    newState[opponentId].hero.currentHealth -= weaponDamage;
+    damageBack = state[opponentId].hero.weaponDamage; // Take damage from opponent's weapon
+  } else {
+    // Attack minion
+    targetMinion.currentHealth -= weaponDamage;
+    damageBack = targetMinion.attack;
 
-  // For now, just deal damage to opponent hero
-  const opponentId = playerId === 'player' ? 'ai' : 'player';
+    if (targetMinion.currentHealth <= 0) {
+      targetDied = true;
+    }
 
-  switch (heroName) {
-    case 'necromancer':
-    case 'mage':
-      // Simple 1 damage attack
-      newState[opponentId].hero.currentHealth -= damage;
-      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} attacked for ${damage} damage`);
-      break;
-
-    case 'barbarian':
-      // Fury Strike: Deal damage equal to Fury, reset Fury
-      const furyDamage = newState[playerId].hero.classResource.value;
-      if (furyDamage > 0) {
-        newState[opponentId].hero.currentHealth -= furyDamage;
-        newState[playerId].hero.classResource.value = 0;
-
-        // Only increment progress if not yet leveled
-        if (!newState[playerId].hero.leveled) {
-          newState[playerId].hero.levelProgress += furyDamage;
-
-          // Check level-up condition
-          if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.BARBARIAN_LEVEL_THRESHOLD) {
-            newState[playerId].hero.leveled = true;
-            newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
-          }
-        }
-
-        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Fury Strike for ${furyDamage} damage (Fury reset to 0)`);
-      } else {
-        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} has no Fury to attack with`);
+    // Update battlefield
+    const newBattlefield = newState[opponentId].zones.battlefield.map(m => {
+      if (m.instanceId === target) {
+        return { ...m, currentHealth: m.currentHealth - weaponDamage };
       }
-      break;
+      return m;
+    }).filter(m => m.currentHealth > 0);
 
-    case 'rogue':
-      // Quick Strike: 1 damage, 2x if stealthed
-      const isStealthed = newState[playerId].hero.classResource.value;
-      const rogueDamage = isStealthed ? damage * 2 : damage;
-      newState[opponentId].hero.currentHealth -= rogueDamage;
-      if (isStealthed) {
-        newState[playerId].hero.classResource.value = false; // Break stealth
-        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} attacked from Stealth for ${rogueDamage} damage (Stealth broken)`);
-      } else {
-        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} attacked for ${rogueDamage} damage`);
-      }
-      break;
+    newState[opponentId].zones.battlefield = newBattlefield;
+
+    // If minion died, move to discard
+    if (targetDied) {
+      newState[opponentId].zones.discard.push(targetMinion);
+
+      // Gain bounty
+      const bounty = targetMinion.bounty || 0;
+      newState[playerId].hero.gold += bounty;
+    }
   }
+
+  // Apply damage back (unless Rogue upgraded killed target)
+  const skipDamageBack = (heroName === 'rogue' && isUpgraded && targetDied);
+  if (!skipDamageBack) {
+    // Apply armor reduction
+    const effectiveDamage = Math.max(0, damageBack - newState[playerId].hero.currentArmor);
+    newState[playerId].hero.currentHealth -= effectiveDamage;
+  }
+
+  // Hero-specific effects
+  if (heroName === 'barbarian') {
+    // Spend ALL Fury
+    newState[playerId].hero.classResource.value = 0;
+
+    // Track weapon damage for level-up (Deal 15+ damage with Weapon Attacks)
+    if (!newState[playerId].hero.leveled) {
+      newState[playerId].hero.levelProgress += weaponDamage;
+
+      if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.BARBARIAN_LEVEL_THRESHOLD) {
+        newState[playerId].hero.leveled = true;
+        // Upgrade abilities
+        newState[playerId].hero.abilities.heroPower = getHeroPowerForHero(heroName, true);
+        newState[playerId].hero.abilities.attack = getHeroAttackForHero(heroName, true);
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+      }
+    }
+  } else if (heroName === 'rogue') {
+    // Break Stealth when taking damage from enemy hero attack
+    if (targetType === 'hero' && damageBack > 0 && !skipDamageBack) {
+      newState[playerId].hero.classResource.value = false;
+    }
+  } else if (heroName === 'necromancer' && targetDied) {
+    // Raise minion if target died
+    const raiseLimit = isUpgraded ? 3 : 2;
+    // TODO: Implement Raise mechanic (need to show graveyard, let player pick minion)
+    newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} can Raise a ${raiseLimit}-cost or less minion`);
+  }
+
+  // Log action
+  const abilityName = newState[playerId].hero.abilities.attack.name;
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used ${abilityName} for ${weaponDamage} damage${targetDied ? ' (killed)' : ''}${furyBonus > 0 ? ` (spent ${furyBonus} Fury)` : ''}`);
 
   // Check for win condition
   if (newState[opponentId].hero.currentHealth <= 0) {
     newState.gameOver = true;
     newState.winner = playerId;
     newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} wins!`);
+  }
+
+  if (newState[playerId].hero.currentHealth <= 0) {
+    newState.gameOver = true;
+    newState.winner = opponentId;
+    newState = logAction(newState, `${opponentId === 'player' ? 'You' : 'AI'} wins!`);
   }
 
   return { state: newState, error: null };
@@ -1295,12 +1521,16 @@ export function raiseMinion(state, playerId, minionInstanceId) {
     }
   };
 
-  // Track level progress
+  // Track level progress (Raise 5 minions)
   if (!newState[playerId].hero.leveled) {
     newState[playerId].hero.levelProgress += 1;
 
     if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.NECROMANCER_LEVEL_THRESHOLD) {
       newState[playerId].hero.leveled = true;
+      // Upgrade abilities
+      const heroName = newState[playerId].hero.name;
+      newState[playerId].hero.abilities.heroPower = getHeroPowerForHero(heroName, true);
+      newState[playerId].hero.abilities.attack = getHeroAttackForHero(heroName, true);
       newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
     }
   }
@@ -1453,6 +1683,26 @@ export function purchaseEquipment(state, playerId, equipmentInstanceId) {
 
   newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} purchased ${equipment.name} for ${cost} gold`);
 
+  // Rogue level-up: Track gold spent (Spend 15 gold)
+  if (newState[playerId].hero.name.toLowerCase() === 'rogue' && !newState[playerId].hero.leveled) {
+    // Initialize goldSpent tracker if it doesn't exist
+    if (!newState[playerId].hero.goldSpent) {
+      newState[playerId].hero.goldSpent = 0;
+    }
+
+    newState[playerId].hero.goldSpent += equipment.cost;
+    newState[playerId].hero.levelProgress = newState[playerId].hero.goldSpent;
+
+    if (newState[playerId].hero.goldSpent >= GAME_CONSTANTS.ROGUE_LEVEL_THRESHOLD) {
+      newState[playerId].hero.leveled = true;
+      // Upgrade abilities
+      const heroName = newState[playerId].hero.name;
+      newState[playerId].hero.abilities.heroPower = getHeroPowerForHero(heroName, true);
+      newState[playerId].hero.abilities.attack = getHeroAttackForHero(heroName, true);
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+    }
+  }
+
   return { state: newState, error: null };
 }
 
@@ -1485,6 +1735,14 @@ function applyEquipmentEffects(state, playerId, equipment, slot) {
       newState[playerId].hero.currentArmor += bonus;
       newState = logAction(newState, `Gained +${bonus} armor`);
     }
+  }
+
+  // Weapon Damage (from weapon equipment)
+  const weaponMatch = effect.match(/\+(\d+) (?:weapon )?(?:damage|attack)/);
+  if (weaponMatch && slot === 'weapon') {
+    const bonus = parseInt(weaponMatch[1]);
+    newState[playerId].hero.weaponDamage += bonus;
+    newState = logAction(newState, `Weapon damage increased to ${newState[playerId].hero.weaponDamage}`);
   }
 
   // Mana
