@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking, raiseMinion, sacrificeMinion } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, declareBlocker, skipBlocking, raiseMinion, sacrificeMinion } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
@@ -151,21 +151,6 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
   };
 
-  const handleRerollShop = () => {
-    if (!isPlayerTurn) {
-      showError('Not your turn!');
-      return;
-    }
-
-    const result = rerollShop(gameState, 'player');
-
-    if (result.error) {
-      showError(result.error);
-    } else {
-      onStateChange(result.state);
-    }
-  };
-
   const handleBlockerSelect = (minionId) => {
     // If in blocking phase and it's opponent's turn (being attacked)
     if (gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn) {
@@ -269,7 +254,6 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               playerGold={playerState.hero.gold}
               isPlayerTurn={isPlayerTurn}
               onPurchase={handlePurchaseEquipment}
-              onReroll={handleRerollShop}
             />
           </div>
         </div>
@@ -667,7 +651,7 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
 }
 
 // Shop Area Component
-function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase, onReroll }) {
+function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase }) {
   return (
     <div className="flex items-center gap-3">
       <div className="text-amber-500 font-bold text-sm">
@@ -684,19 +668,8 @@ function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase, onR
           />
         ))}
       </div>
-      <button
-        onClick={onReroll}
-        disabled={!isPlayerTurn || playerGold < 1}
-        className={`px-3 py-1 text-xs font-bold rounded transition
-          ${isPlayerTurn && playerGold >= 1
-            ? 'bg-amber-600 text-white hover:bg-amber-500'
-            : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-          }`}
-      >
-        REROLL (1g)
-      </button>
       <div className="text-xs text-zinc-500">
-        Next refresh: Round {roundNumber < 5 ? 5 : roundNumber < 9 ? 9 : '-'}
+        Next refresh: Round {roundNumber < 5 ? 5 : roundNumber < 8 ? 8 : '-'}
       </div>
     </div>
   );
