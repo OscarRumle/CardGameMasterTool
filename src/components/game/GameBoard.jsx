@@ -11,6 +11,60 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [damageOrders, setDamageOrders] = useState({}); // {attackerId: [blockerId1, blockerId2, ...]}
   const [shopExpanded, setShopExpanded] = useState(false);
   const [logExpanded, setLogExpanded] = useState(false);
+  const [animatingAttackers, setAnimatingAttackers] = useState(new Set());
+  const [animatingDefenders, setAnimatingDefenders] = useState(new Set());
+
+  // Sound effects using Web Audio API
+  const playSound = (soundType) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const gainNode = audioContext.createGain();
+      gainNode.connect(audioContext.destination);
+      gainNode.gain.value = 0.15;
+
+      if (soundType === 'whoosh') {
+        // Whoosh - descending sweep
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.2);
+        oscillator.connect(gainNode);
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+      } else if (soundType === 'impact') {
+        // Impact - short burst with noise
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+        oscillator.connect(gainNode);
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+      } else if (soundType === 'block') {
+        // Block - metallic clang
+        const oscillator1 = audioContext.createOscillator();
+        const oscillator2 = audioContext.createOscillator();
+        oscillator1.type = 'square';
+        oscillator2.type = 'square';
+        oscillator1.frequency.setValueAtTime(600, audioContext.currentTime);
+        oscillator2.frequency.setValueAtTime(800, audioContext.currentTime);
+        oscillator1.connect(gainNode);
+        oscillator2.connect(gainNode);
+        gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+        oscillator1.start(audioContext.currentTime);
+        oscillator2.start(audioContext.currentTime);
+        oscillator1.stop(audioContext.currentTime + 0.15);
+        oscillator2.stop(audioContext.currentTime + 0.15);
+      }
+    } catch (e) {
+      // Silently fail if audio doesn't work
+    }
+  };
 
   const playerState = gameState.player;
   const aiState = gameState.ai;
@@ -238,18 +292,48 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   };
 
   const handleResolveCombat = () => {
-    const result = resolveCombat(gameState);
+    // Trigger animations before resolving combat
+    const attackerIds = new Set(gameState.combat.attackers.map(a => a.instanceId));
+    const defenderIds = new Set();
 
-    if (result.error) {
-      showError(result.error);
-    } else {
-      onStateChange(result.state);
+    // Collect all defenders (blockers)
+    Object.values(gameState.combat.blockers).forEach(blockers => {
+      blockers.forEach(b => defenderIds.add(b.instanceId));
+    });
 
-      // Check for game over
-      if (result.state.gameOver) {
-        onGameOver();
+    setAnimatingAttackers(attackerIds);
+    setAnimatingDefenders(defenderIds);
+
+    // Play whoosh sound for attackers
+    playSound('whoosh');
+
+    // Trigger impact and block sounds mid-animation
+    setTimeout(() => {
+      playSound('impact');
+      if (defenderIds.size > 0) {
+        playSound('block');
       }
-    }
+    }, 300);
+
+    // Wait for animations to complete before resolving
+    setTimeout(() => {
+      const result = resolveCombat(gameState);
+
+      if (result.error) {
+        showError(result.error);
+      } else {
+        onStateChange(result.state);
+
+        // Check for game over
+        if (result.state.gameOver) {
+          onGameOver();
+        }
+      }
+
+      // Clear animations
+      setAnimatingAttackers(new Set());
+      setAnimatingDefenders(new Set());
+    }, 650);
   };
 
   const handlePurchaseEquipment = (equipmentId) => {
@@ -502,6 +586,8 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 isPlayerTurn={isPlayerTurn}
                 selectedBlocker={selectedBlocker}
                 onAttackerSelect={handleAttackerSelect}
+                animatingAttackers={animatingAttackers}
+                animatingDefenders={animatingDefenders}
               />
             </div>
 
@@ -538,6 +624,8 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 onBlockerSelect={handleBlockerSelect}
                 onRaiseMinion={handleRaiseMinion}
                 onSacrificeMinion={handleSacrificeMinion}
+                animatingAttackers={animatingAttackers}
+                animatingDefenders={animatingDefenders}
               />
             </div>
           </div>
@@ -756,7 +844,7 @@ function HeroPanel({ state, isPlayer, isPlayerTurn, onHeroPower, onHeroAttack })
 }
 
 // Opponent Area Component
-function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttackerSelect }) {
+function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttackerSelect, animatingAttackers, animatingDefenders }) {
   const inBlockingPhase = combat.active && combat.phase === 'blocking' && !isPlayerTurn;
 
   return (
@@ -764,12 +852,12 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 
       {/* Attackers Display (during blocking phase) */}
       {inBlockingPhase && combat.attackers.length > 0 && (
-        <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-3">
-          <div className="text-xs text-red-400 font-bold mb-2">
+        <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-4">
+          <div className="text-sm text-red-400 font-bold mb-3">
             ATTACKING YOU ({combat.attackers.length} attackers)
-            {selectedBlocker && <span className="ml-2 text-amber-400">- Click attacker to block</span>}
+            {selectedBlocker && <span className="ml-2 text-amber-400 text-xs">- Click attacker to block</span>}
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-3 flex-wrap">
             {combat.attackers.map((attacker) => {
               const blockers = combat.blockers[attacker.instanceId] || [];
               const blockCount = blockers.length;
@@ -780,6 +868,7 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
                     isOpponent={true}
                     onClick={() => selectedBlocker && onAttackerSelect(attacker.instanceId)}
                     clickable={selectedBlocker !== null}
+                    isAttacking={animatingAttackers.has(attacker.instanceId)}
                   />
                   {blockCount > 0 && (
                     <div className="absolute -bottom-2 left-0 right-0 text-center">
@@ -796,14 +885,20 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
       )}
 
       {/* AI Battlefield */}
-      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 min-h-[120px]">
-        <div className="text-xs text-zinc-500 mb-2">OPPONENT BATTLEFIELD</div>
-        <div className="flex gap-2 flex-wrap">
+      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 min-h-[280px]">
+        <div className="text-sm text-zinc-500 mb-3 font-semibold">OPPONENT BATTLEFIELD</div>
+        <div className="flex gap-3 flex-wrap">
           {state.zones.battlefield.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No minions</div>
           ) : (
             state.zones.battlefield.map((minion) => (
-              <MinionCard key={minion.instanceId} minion={minion} isOpponent={true} />
+              <MinionCard
+                key={minion.instanceId}
+                minion={minion}
+                isOpponent={true}
+                isAttacking={animatingAttackers.has(minion.instanceId)}
+                isDefending={animatingDefenders.has(minion.instanceId)}
+              />
             ))
           )}
         </div>
@@ -813,7 +908,7 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders }) {
   const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
   const isNecromancer = state.hero.name.toLowerCase() === 'necromancer';
 
@@ -821,12 +916,12 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
     <div className="space-y-3">
       {/* Necromancer Graveyard */}
       {isNecromancer && state.zones.graveyard.length > 0 && (
-        <div className="bg-purple-900/20 border-2 border-purple-600 rounded-lg p-3">
-          <div className="text-xs text-purple-400 font-bold mb-2">
+        <div className="bg-purple-900/20 border-2 border-purple-600 rounded-lg p-4">
+          <div className="text-sm text-purple-400 font-bold mb-3">
             GRAVEYARD ({state.zones.graveyard.length})
-            {isPlayerTurn && <span className="ml-2 text-amber-500">(Click to Raise)</span>}
+            {isPlayerTurn && <span className="ml-2 text-amber-500 text-xs">(Click to Raise)</span>}
           </div>
-          <div className="flex gap-2 flex-wrap max-h-32 overflow-y-auto">
+          <div className="flex gap-3 flex-wrap max-h-40 overflow-y-auto">
             {state.zones.graveyard.map((minion) => (
               <div key={minion.instanceId} className="relative">
                 <MinionCard
@@ -843,17 +938,17 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
       )}
 
       {/* Player Battlefield */}
-      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 min-h-[120px]">
-        <div className="text-xs text-zinc-500 mb-2">
+      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 min-h-[280px]">
+        <div className="text-sm text-zinc-500 mb-3 font-semibold">
           YOUR BATTLEFIELD
           {!combatActive && isPlayerTurn && state.zones.battlefield.length > 0 && (
-            <span className="ml-2 text-amber-500">(Click minions to select attackers)</span>
+            <span className="ml-2 text-amber-500 text-xs">(Click minions to select attackers)</span>
           )}
           {inBlockingPhase && state.zones.battlefield.length > 0 && (
-            <span className="ml-2 text-blue-400">(Click minion, then click attacker to block)</span>
+            <span className="ml-2 text-blue-400 text-xs">(Click minion, then click attacker to block)</span>
           )}
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-3 flex-wrap">
           {state.zones.battlefield.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No minions</div>
           ) : (
@@ -875,6 +970,8 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
                       }
                     }}
                     clickable={(!combatActive && isPlayerTurn) || inBlockingPhase}
+                    isAttacking={animatingAttackers.has(minion.instanceId)}
+                    isDefending={animatingDefenders.has(minion.instanceId)}
                   />
                   {/* Necromancer Sacrifice Button */}
                   {isNecromancer && isPlayerTurn && !combatActive && (
@@ -962,38 +1059,47 @@ function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase, com
 }
 
 // Minion Card Component
-function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, clickable = false }) {
+function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, clickable = false, isAttacking = false, isDefending = false }) {
+  // Determine which animation to apply
+  let animationClass = '';
+  if (isAttacking) {
+    animationClass = isOpponent ? 'animate-attack-lunge-down' : 'animate-attack-lunge';
+  } else if (isDefending) {
+    animationClass = 'animate-hit-impact animate-block-recoil';
+  }
+
   return (
     <div
       onClick={clickable ? onClick : undefined}
-      className={`relative w-24 h-28 rounded-lg border-2 p-2 text-xs transition-all
+      className={`relative w-32 h-40 rounded-lg border-2 p-2 text-sm transition-all
         ${minion.tapped ? 'opacity-50 rotate-90' : ''}
         ${isOpponent ? 'bg-red-900/30 border-red-700' : 'bg-green-900/30 border-green-700'}
         ${minion.summoningSickness ? 'border-yellow-500' : ''}
         ${isSelected ? 'border-orange-500 border-4 shadow-lg shadow-orange-500/50 scale-110' : ''}
         ${clickable ? 'cursor-pointer hover:scale-105 hover:shadow-lg' : ''}
+        ${animationClass}
       `}
     >
-      <div className="font-bold text-white truncate">{minion.name}</div>
-      <div className="text-[10px] text-zinc-400 truncate mt-1">{minion.effect}</div>
+      <div className="font-bold text-white truncate text-sm">{minion.name}</div>
+      <div className="text-xs text-zinc-400 line-clamp-2 mt-1">{minion.effect}</div>
 
       {/* Stats */}
-      <div className="absolute bottom-1 left-1 right-1 flex justify-between">
-        <div className="bg-red-600 text-white rounded px-1.5 py-0.5 font-bold text-xs">
+      <div className="absolute bottom-2 left-2 right-2 flex justify-between">
+        <div className="bg-red-600 text-white rounded px-2 py-1 font-bold text-sm">
           {minion.attack}
         </div>
-        <div className="bg-green-600 text-white rounded px-1.5 py-0.5 font-bold text-xs">
+        <div className="bg-green-600 text-white rounded px-2 py-1 font-bold text-sm">
           {minion.currentHealth}/{minion.health}
         </div>
       </div>
 
       {/* Mana Cost */}
-      <div className="absolute -top-2 -right-2 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-xs">
+      <div className="absolute -top-2 -right-2 bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center font-bold text-sm">
         {minion.manaCost}
       </div>
 
       {minion.summoningSickness && (
-        <div className="absolute top-0 right-0 text-yellow-500 text-xs">💤</div>
+        <div className="absolute top-0 right-0 text-yellow-500 text-sm">💤</div>
       )}
     </div>
   );
