@@ -14,6 +14,18 @@ const SAMPLE_DECKS = [
     isSample: true
   },
   {
+    name: 'Necromancer Deck (Sample)',
+    type: 'hero',
+    path: '/hero-necromancer.csv',
+    isSample: true
+  },
+  {
+    name: 'Rogue Deck (Sample)',
+    type: 'hero',
+    path: '/hero-rogue.csv',
+    isSample: true
+  },
+  {
     name: 'Equipment Shop (Sample)',
     type: 'equipment',
     path: '/equipment-starter-shop.csv',
