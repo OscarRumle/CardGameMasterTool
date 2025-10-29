@@ -46,6 +46,7 @@ function HeroSelection({ decks, onStartGame }) {
   const [shopDeck, setShopDeck] = useState(null);
 
   console.log('HeroSelection rendered with', decks.length, 'decks');
+  console.log('Decks available:', decks);
 
   const canStart = playerDeck && aiDeck && shopDeck;
 
@@ -129,7 +130,10 @@ function HeroSelection({ decks, onStartGame }) {
             <select
               value={playerDeck?.id || ''}
               onChange={(e) => {
-                const deck = decks.find(d => d.id === parseInt(e.target.value));
+                console.log('Player deck selected, value:', e.target.value);
+                const deckId = e.target.value;
+                const deck = decks.find(d => String(d.id) === String(deckId));
+                console.log('Found deck:', deck);
                 setPlayerDeck(deck);
               }}
               className="w-full bg-zinc-800 text-white px-4 py-3 rounded-lg border-2 border-zinc-700 focus:border-amber-500 focus:outline-none"
@@ -137,7 +141,7 @@ function HeroSelection({ decks, onStartGame }) {
               <option value="">-- Select Deck --</option>
               {decks.map((deck) => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.name} ({deck.cards.length} cards)
+                  {deck.name} ({deck.cards?.length || 0} cards)
                 </option>
               ))}
             </select>
@@ -151,7 +155,9 @@ function HeroSelection({ decks, onStartGame }) {
             <select
               value={aiDeck?.id || ''}
               onChange={(e) => {
-                const deck = decks.find(d => d.id === parseInt(e.target.value));
+                const deckId = e.target.value;
+                const deck = decks.find(d => String(d.id) === String(deckId));
+                console.log('AI deck selected:', deck);
                 setAiDeck(deck);
               }}
               className="w-full bg-zinc-800 text-white px-4 py-3 rounded-lg border-2 border-zinc-700 focus:border-amber-500 focus:outline-none"
@@ -159,7 +165,7 @@ function HeroSelection({ decks, onStartGame }) {
               <option value="">-- Select Deck --</option>
               {decks.map((deck) => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.name} ({deck.cards.length} cards)
+                  {deck.name} ({deck.cards?.length || 0} cards)
                 </option>
               ))}
             </select>
@@ -173,7 +179,9 @@ function HeroSelection({ decks, onStartGame }) {
             <select
               value={shopDeck?.id || ''}
               onChange={(e) => {
-                const deck = decks.find(d => d.id === parseInt(e.target.value));
+                const deckId = e.target.value;
+                const deck = decks.find(d => String(d.id) === String(deckId));
+                console.log('Shop deck selected:', deck);
                 setShopDeck(deck);
               }}
               className="w-full bg-zinc-800 text-white px-4 py-3 rounded-lg border-2 border-zinc-700 focus:border-amber-500 focus:outline-none"
@@ -181,7 +189,7 @@ function HeroSelection({ decks, onStartGame }) {
               <option value="">-- Select Deck --</option>
               {decks.map((deck) => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.name} ({deck.cards.length} cards)
+                  {deck.name} ({deck.cards?.length || 0} cards)
                 </option>
               ))}
             </select>
