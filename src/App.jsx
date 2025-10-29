@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { parseCSV } from './utils/csvParser';
 import { analyzeDeck } from './utils/deckAnalyzer';
 import { getDefaultCustomization } from './utils/customization';
+import { loadSampleDecks } from './utils/loadSampleDecks';
 import HomeTab from './components/tabs/HomeTab';
 import MyDecksTab from './components/tabs/MyDecksTab';
 import DeckViewTab from './components/tabs/DeckViewTab';
@@ -22,6 +23,7 @@ function App() {
   const [showCustomize, setShowCustomize] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deckToDelete, setDeckToDelete] = useState(null);
+  const [sampleDecksLoaded, setSampleDecksLoaded] = useState(false);
 
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckType, setNewDeckType] = useState('hero');
@@ -54,10 +56,29 @@ function App() {
     if (savedTextSettings) setTextSettings(JSON.parse(savedTextSettings));
   }, []);
 
-  // Save to localStorage
+  // Load sample decks after initial load
   useEffect(() => {
-    if (decks.length > 0) {
-      localStorage.setItem('cardDecks', JSON.stringify(decks));
+    if (!sampleDecksLoaded && decks.length >= 0) {
+      loadSampleDecks(parseCSV, decks).then(newSampleDecks => {
+        if (newSampleDecks.length > 0) {
+          console.log(`Adding ${newSampleDecks.length} sample decks to the deck list`);
+          setDecks(prevDecks => [...prevDecks, ...newSampleDecks]);
+        }
+        setSampleDecksLoaded(true);
+      }).catch(error => {
+        console.error('Error loading sample decks:', error);
+        setSampleDecksLoaded(true);
+      });
+    }
+  }, [decks.length, sampleDecksLoaded]);
+
+  // Save to localStorage (exclude sample decks)
+  useEffect(() => {
+    // Only save user-created decks, not sample decks
+    const userDecks = decks.filter(deck => !deck.isSample);
+
+    if (userDecks.length > 0) {
+      localStorage.setItem('cardDecks', JSON.stringify(userDecks));
     } else {
       localStorage.removeItem('cardDecks');
     }
