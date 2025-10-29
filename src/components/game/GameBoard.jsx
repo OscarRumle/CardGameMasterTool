@@ -13,6 +13,9 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [logExpanded, setLogExpanded] = useState(false);
   const [animatingAttackers, setAnimatingAttackers] = useState(new Set());
   const [animatingDefenders, setAnimatingDefenders] = useState(new Set());
+  const [hoveredCard, setHoveredCard] = useState(null);
+  const [draggedCard, setDraggedCard] = useState(null);
+  const [dragOverBattlefield, setDragOverBattlefield] = useState(false);
 
   // Sound effects using Web Audio API
   const playSound = (soundType) => {
@@ -205,6 +208,51 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const showError = (msg) => {
     setErrorMessage(msg);
     setTimeout(() => setErrorMessage(''), GAME_CONSTANTS.ERROR_MESSAGE_DURATION_MS);
+  };
+
+  // Drag and drop handlers for cards
+  const handleCardDragStart = (card) => {
+    if (!isPlayerTurn || playerState.hero.currentMana < card.manaCost) {
+      return;
+    }
+    setDraggedCard(card);
+    setHoveredCard(null);
+  };
+
+  const handleCardDragEnd = () => {
+    setDraggedCard(null);
+    setDragOverBattlefield(false);
+  };
+
+  const handleBattlefieldDragEnter = (e) => {
+    if (draggedCard) {
+      e.preventDefault();
+      setDragOverBattlefield(true);
+    }
+  };
+
+  const handleBattlefieldDragOver = (e) => {
+    if (draggedCard) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const handleBattlefieldDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedCard) {
+      handlePlayCard(draggedCard);
+    }
+    setDragOverBattlefield(false);
+    setDraggedCard(null);
+  };
+
+  const handleBattlefieldDragLeave = (e) => {
+    // Only set to false if we're actually leaving the battlefield
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverBattlefield(false);
+    }
   };
 
   const handlePlayCard = (card) => {
@@ -576,10 +624,10 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
             />
           </div>
 
-          {/* Center Battlefield */}
-          <div className="flex-1 flex flex-col bg-zinc-900/50 p-4 overflow-y-auto">
-            {/* Opponent Area */}
-            <div className="mb-4">
+          {/* Center Battlefield - Split vertically */}
+          <div className="flex-1 flex flex-col bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-900 overflow-hidden">
+            {/* Opponent Battlefield - Top Half */}
+            <div className="flex-1 flex flex-col justify-end p-4 pb-2 overflow-y-auto">
               <OpponentArea
                 state={aiState}
                 combat={gameState.combat}
@@ -591,25 +639,30 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               />
             </div>
 
-            {/* Blocker Assignments Display (during blocking phase for defender) */}
-            {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
-              <BlockerAssignmentsUI
-                combat={gameState.combat}
-                onUnassign={handleUnassignBlocker}
-              />
+            {/* Center Divider Line */}
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-600 to-transparent shadow-lg shadow-amber-500/50" />
+
+            {/* Combat Phase UI - Centered */}
+            {gameState.combat.active && (
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30">
+                {gameState.combat.phase === 'blocking' && !isPlayerTurn && (
+                  <BlockerAssignmentsUI
+                    combat={gameState.combat}
+                    onUnassign={handleUnassignBlocker}
+                  />
+                )}
+                {gameState.combat.phase === 'damage_order' && isPlayerTurn && (
+                  <DamageOrderUI
+                    combat={gameState.combat}
+                    damageOrders={damageOrders}
+                    onSetOrder={handleSetDamageOrder}
+                  />
+                )}
+              </div>
             )}
 
-            {/* Damage Order UI (for attacker when multiple blockers) */}
-            {gameState.combat.active && gameState.combat.phase === 'damage_order' && isPlayerTurn && (
-              <DamageOrderUI
-                combat={gameState.combat}
-                damageOrders={damageOrders}
-                onSetOrder={handleSetDamageOrder}
-              />
-            )}
-
-            {/* Player Area */}
-            <div className="mt-auto">
+            {/* Player Battlefield - Bottom Half */}
+            <div className="flex-1 flex flex-col justify-start p-4 pt-2 overflow-y-auto pb-32">
               <PlayerArea
                 state={playerState}
                 isPlayerTurn={isPlayerTurn}
@@ -626,9 +679,26 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 onSacrificeMinion={handleSacrificeMinion}
                 animatingAttackers={animatingAttackers}
                 animatingDefenders={animatingDefenders}
+                onBattlefieldDragEnter={handleBattlefieldDragEnter}
+                onBattlefieldDragOver={handleBattlefieldDragOver}
+                onBattlefieldDrop={handleBattlefieldDrop}
+                onBattlefieldDragLeave={handleBattlefieldDragLeave}
+                isDragOver={dragOverBattlefield}
               />
             </div>
           </div>
+
+          {/* MTG Arena-style Hand at Bottom - Fixed Position */}
+          <PlayerHandMTG
+            hand={playerState.zones.hand}
+            isPlayerTurn={isPlayerTurn}
+            currentMana={playerState.hero.currentMana}
+            hoveredCard={hoveredCard}
+            onHover={setHoveredCard}
+            onDragStart={handleCardDragStart}
+            onDragEnd={handleCardDragEnd}
+            draggedCard={draggedCard}
+          />
 
           {/* Opponent Hero Panel - Right Side */}
           <div className="w-72 border-l-2 border-zinc-700 bg-zinc-900/50 p-3 overflow-y-auto">
@@ -852,12 +922,12 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 
       {/* Attackers Display (during blocking phase) */}
       {inBlockingPhase && combat.attackers.length > 0 && (
-        <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-4">
-          <div className="text-sm text-red-400 font-bold mb-3">
-            ATTACKING YOU ({combat.attackers.length} attackers)
-            {selectedBlocker && <span className="ml-2 text-amber-400 text-xs">- Click attacker to block</span>}
+        <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-3 mb-2">
+          <div className="text-xs text-red-400 font-bold mb-2 text-center">
+            ATTACKING YOU ({combat.attackers.length})
+            {selectedBlocker && <span className="ml-2 text-amber-400 text-[10px]">Click to block</span>}
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap justify-center">
             {combat.attackers.map((attacker) => {
               const blockers = combat.blockers[attacker.instanceId] || [];
               const blockCount = blockers.length;
@@ -885,9 +955,9 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
       )}
 
       {/* AI Battlefield */}
-      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 min-h-[280px]">
-        <div className="text-sm text-zinc-500 mb-3 font-semibold">OPPONENT BATTLEFIELD</div>
-        <div className="flex gap-3 flex-wrap">
+      <div className="w-full h-full flex flex-col">
+        <div className="text-xs text-zinc-500/70 mb-2 text-center">OPPONENT BATTLEFIELD</div>
+        <div className="flex-1 flex gap-4 flex-wrap content-center justify-center">
           {state.zones.battlefield.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No minions</div>
           ) : (
@@ -907,8 +977,90 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
   );
 }
 
+// MTG Arena-style Hand Component
+function PlayerHandMTG({ hand, isPlayerTurn, currentMana, hoveredCard, onHover, onDragStart, onDragEnd, draggedCard }) {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 h-32 z-40 pointer-events-none">
+      <div className="relative h-full flex items-end justify-center">
+        {hand.map((card, index) => {
+          const canPlay = isPlayerTurn && currentMana >= card.manaCost;
+          const isHovered = hoveredCard?.instanceId === card.instanceId;
+          const isDragging = draggedCard?.instanceId === card.instanceId;
+          const totalCards = hand.length;
+          const centerIndex = (totalCards - 1) / 2;
+
+          // Calculate position with slight fan effect
+          const offsetFromCenter = index - centerIndex;
+          const horizontalSpacing = 60; // pixels between cards
+          const xOffset = offsetFromCenter * horizontalSpacing;
+
+          // Slight rotation for fan effect
+          const rotation = offsetFromCenter * 2;
+
+          // Vertical position - hovered cards raise up
+          const yOffset = isHovered ? -250 : 0;
+
+          return (
+            <div
+              key={card.instanceId}
+              className="absolute pointer-events-auto"
+              draggable={canPlay}
+              style={{
+                transform: `translateX(${xOffset}px) translateY(${yOffset}px) rotate(${rotation}deg)`,
+                transformOrigin: 'bottom center',
+                transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                zIndex: isHovered ? 1000 : 100 + index,
+              }}
+              onMouseEnter={() => !isDragging && onHover(card)}
+              onMouseLeave={() => !isDragging && onHover(null)}
+              onDragStart={(e) => {
+                if (canPlay) {
+                  onDragStart(card);
+                  // Make drag image transparent
+                  const img = new Image();
+                  img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                  e.dataTransfer.setDragImage(img, 0, 0);
+                }
+              }}
+              onDragEnd={onDragEnd}
+            >
+              <div style={{
+                clipPath: isHovered ? 'none' : 'inset(0 0 70% 0)',
+                transition: 'clip-path 0.3s ease',
+                opacity: isDragging ? 0.3 : 1,
+              }}>
+                <MTGCard
+                  card={card}
+                  canPlay={canPlay}
+                  isHovered={isHovered}
+                  isDragging={isDragging}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hover Card Preview - Enlarged */}
+      {hoveredCard && !draggedCard && (
+        <div className="fixed left-1/2 bottom-32 -translate-x-1/2 pointer-events-none z-[1001]"
+          style={{
+            transform: 'translateX(-50%) scale(1.2)',
+          }}
+        >
+          <MTGCard
+            card={hoveredCard}
+            canPlay={isPlayerTurn && currentMana >= hoveredCard.manaCost}
+            isHovered={true}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders, onBattlefieldDragOver, onBattlefieldDrop, onBattlefieldDragEnter, onBattlefieldDragLeave, isDragOver }) {
   const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
   const isNecromancer = state.hero.name.toLowerCase() === 'necromancer';
 
@@ -937,18 +1089,29 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
         </div>
       )}
 
-      {/* Player Battlefield */}
-      <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-4 min-h-[280px]">
-        <div className="text-sm text-zinc-500 mb-3 font-semibold">
+      {/* Player Battlefield - with drag and drop target */}
+      <div
+        className={`w-full h-full flex flex-col transition-all
+          ${isDragOver ? 'bg-green-900/20 shadow-[inset_0_0_50px_rgba(34,197,94,0.3)]' : ''}
+        `}
+        onDragEnter={onBattlefieldDragEnter}
+        onDragOver={onBattlefieldDragOver}
+        onDrop={onBattlefieldDrop}
+        onDragLeave={onBattlefieldDragLeave}
+      >
+        <div className="text-xs text-zinc-500/70 mb-2 text-center">
           YOUR BATTLEFIELD
           {!combatActive && isPlayerTurn && state.zones.battlefield.length > 0 && (
-            <span className="ml-2 text-amber-500 text-xs">(Click minions to select attackers)</span>
+            <span className="ml-2 text-amber-500 text-[10px]">(Click to attack)</span>
           )}
           {inBlockingPhase && state.zones.battlefield.length > 0 && (
-            <span className="ml-2 text-blue-400 text-xs">(Click minion, then click attacker to block)</span>
+            <span className="ml-2 text-blue-400 text-[10px]">(Click to block)</span>
+          )}
+          {isDragOver && (
+            <span className="ml-2 text-green-400 text-xs font-bold">(Drop to play)</span>
           )}
         </div>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex-1 flex gap-4 flex-wrap content-center justify-center">
           {state.zones.battlefield.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No minions</div>
           ) : (
@@ -993,41 +1156,6 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
         </div>
       </div>
 
-      {/* Player Hand */}
-      <div className="bg-zinc-800/50 border-2 border-amber-600/30 rounded-lg p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-xs text-amber-500 font-bold">YOUR HAND ({state.zones.hand.length})</div>
-          {selectedCard && (
-            <button
-              onClick={() => onPlayCard(selectedCard)}
-              disabled={!isPlayerTurn || state.hero.currentMana < selectedCard.manaCost}
-              className={`px-4 py-1 text-xs font-bold rounded-lg transition
-                ${isPlayerTurn && state.hero.currentMana >= selectedCard.manaCost
-                  ? 'bg-amber-500 text-black hover:bg-amber-400'
-                  : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                }`}
-            >
-              PLAY {selectedCard.name.toUpperCase()}
-            </button>
-          )}
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {state.zones.hand.length === 0 ? (
-            <div className="text-zinc-600 text-sm italic">No cards in hand</div>
-          ) : (
-            state.zones.hand.map((card) => (
-              <HandCard
-                key={card.instanceId}
-                card={card}
-                isSelected={selectedCard?.instanceId === card.instanceId}
-                onSelect={() => onSelectCard(card)}
-                onPlay={() => onPlayCard(card)}
-                canPlay={isPlayerTurn && state.hero.currentMana >= card.manaCost}
-              />
-            ))
-          )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -1105,51 +1233,89 @@ function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, cl
   );
 }
 
-// Hand Card Component
-function HandCard({ card, isSelected, onSelect, onPlay, canPlay }) {
+// MTG Arena-style Card Component
+function MTGCard({ card, canPlay, isHovered = false, isDragging = false, style = {} }) {
+  const isMinion = card.cardType === 'minion';
+  const isSpell = card.cardType === 'spell';
+
+  // Frame colors based on card type
+  const frameColor = isMinion ? 'from-green-900 to-green-950' : 'from-purple-900 to-purple-950';
+  const borderColor = isMinion ? 'border-green-700' : 'border-purple-700';
+
   return (
     <div
-      onClick={onSelect}
-      onDoubleClick={() => canPlay && onPlay()}
-      className={`relative w-32 h-40 rounded-lg border-2 p-2 cursor-pointer transition-all
-        ${isSelected ? 'border-amber-500 -translate-y-2 shadow-lg shadow-amber-500/50' : 'border-zinc-600'}
-        ${canPlay ? 'hover:border-amber-400 hover:-translate-y-1' : 'opacity-50'}
-        bg-zinc-800
+      style={style}
+      className={`relative w-52 h-72 rounded-xl overflow-hidden border-4 ${borderColor}
+        transition-all duration-200 select-none
+        ${isDragging ? 'opacity-50 cursor-grabbing' : 'cursor-grab'}
+        ${!canPlay ? 'opacity-60' : ''}
+        ${isHovered ? 'shadow-2xl shadow-amber-500/50' : 'shadow-xl'}
       `}
     >
-      {/* Card Type Badge */}
-      <div className={`text-[10px] font-bold px-2 py-0.5 rounded mb-1
-        ${card.cardType === 'minion' ? 'bg-green-700 text-white' : 'bg-purple-700 text-white'}
-      `}>
-        {card.cardType.toUpperCase()}
+      {/* Card Frame Background */}
+      <div className={`absolute inset-0 bg-gradient-to-b ${frameColor}`} />
+
+      {/* Mana Cost Circle - Top Left */}
+      <div className="absolute top-2 left-2 w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 border-4 border-blue-300 flex items-center justify-center z-10 shadow-lg">
+        <span className="text-white font-bold text-2xl">{card.manaCost}</span>
       </div>
 
-      {/* Card Name */}
-      <div className="font-bold text-white text-sm truncate">{card.name}</div>
-
-      {/* Effect */}
-      <div className="text-[10px] text-zinc-300 mt-2 line-clamp-4">{card.effect}</div>
-
-      {/* Stats for Minions */}
-      {card.cardType === 'minion' && (
-        <div className="absolute bottom-2 left-2 right-2 flex justify-between">
-          <div className="bg-red-600 text-white rounded px-2 py-1 font-bold text-sm">
-            {card.attack}
+      {/* Card Art Area */}
+      <div className="relative h-32 mt-2 mx-2 rounded-lg overflow-hidden border-2 border-black/50">
+        <div className={`absolute inset-0 bg-gradient-to-br ${isMinion ? 'from-green-600 to-green-800' : 'from-purple-600 to-purple-800'} opacity-40`} />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-6xl opacity-30">
+            {isMinion ? '⚔️' : '✨'}
           </div>
-          <div className="bg-green-600 text-white rounded px-2 py-1 font-bold text-sm">
-            {card.health}
+        </div>
+      </div>
+
+      {/* Card Name Banner */}
+      <div className="relative mt-2 mx-2 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 border-2 border-amber-600/50 rounded-lg px-3 py-1.5">
+        <div className="font-bold text-amber-100 text-base truncate">{card.name}</div>
+      </div>
+
+      {/* Card Type */}
+      <div className="mx-2 mt-1">
+        <div className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${isMinion ? 'bg-green-700 text-green-100' : 'bg-purple-700 text-purple-100'}`}>
+          {card.cardType.toUpperCase()}
+        </div>
+      </div>
+
+      {/* Text Box */}
+      <div className="relative mx-2 mt-2 bg-zinc-900/90 border-2 border-zinc-700 rounded-lg p-2 h-20 overflow-hidden">
+        <div className="text-zinc-200 text-xs leading-snug">
+          {card.effect}
+        </div>
+      </div>
+
+      {/* Stats for Minions - Bottom */}
+      {isMinion && (
+        <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center">
+          {/* Attack */}
+          <div className="relative w-14 h-14">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-600 to-red-800 border-4 border-red-900 transform rotate-45 rounded-lg" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-white font-bold text-2xl z-10">{card.attack}</span>
+            </div>
+          </div>
+
+          {/* Health */}
+          <div className="relative w-14 h-14">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-600 to-green-800 border-4 border-green-900 rounded-full" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-white font-bold text-2xl z-10">{card.health}</span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Mana Cost */}
-      <div className="absolute -top-2 -right-2 bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold">
-        {card.manaCost}
-      </div>
-
+      {/* Cannot Play Overlay */}
       {!canPlay && (
-        <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-          <div className="text-red-400 font-bold text-xs">NOT ENOUGH MANA</div>
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+          <div className="text-red-400 font-bold text-sm px-4 py-2 bg-black/50 rounded-lg border-2 border-red-500">
+            NOT ENOUGH MANA
+          </div>
         </div>
       )}
     </div>
