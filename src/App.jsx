@@ -302,7 +302,7 @@ function App() {
         )}
 
         {currentTab === 'simulator' && (
-          <SimulatorTab decks={decks} />
+          <SimulatorTab decks={decks} textSettings={textSettings} keywords={keywords} />
         )}
 
         {currentTab === 'text-tweaks' && (
