@@ -883,3 +883,276 @@ export function useHeroAttack(state, playerId, target) {
 
   return { state: newState, error: null };
 }
+
+/**
+ * Declare attackers for combat
+ * Minions must be untapped and not have summoning sickness
+ */
+export function declareAttackers(state, playerId, attackerIds) {
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (state.phase !== 'main') {
+    return { error: 'Can only declare attackers during main phase', state };
+  }
+
+  if (state.combat.active) {
+    return { error: 'Combat already in progress', state };
+  }
+
+  const playerState = state[playerId];
+
+  // Validate all attackers
+  const attackers = [];
+  for (const attackerId of attackerIds) {
+    const minion = playerState.zones.battlefield.find(m => m.instanceId === attackerId);
+
+    if (!minion) {
+      return { error: `Minion ${attackerId} not found on battlefield`, state };
+    }
+
+    if (minion.tapped) {
+      return { error: `${minion.name} is already tapped`, state };
+    }
+
+    if (minion.summoningSickness) {
+      return { error: `${minion.name} has summoning sickness`, state };
+    }
+
+    attackers.push(minion);
+  }
+
+  // If no attackers, do nothing
+  if (attackers.length === 0) {
+    return { state, error: null };
+  }
+
+  // Tap all attackers
+  const newBattlefield = playerState.zones.battlefield.map(minion => {
+    if (attackerIds.includes(minion.instanceId)) {
+      return { ...minion, tapped: true };
+    }
+    return minion;
+  });
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      zones: {
+        ...playerState.zones,
+        battlefield: newBattlefield
+      }
+    },
+    combat: {
+      active: true,
+      attackers: attackers.map(a => ({ ...a, tapped: true })),
+      blockers: {},
+      damageOrder: {}
+    }
+  };
+
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} declared ${attackers.length} attacker(s)`);
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Declare a blocker for an attacker
+ * Blocker must be untapped
+ */
+export function declareBlocker(state, defenderId, blockerId, attackerId) {
+  // Validate
+  if (state.currentPlayer === defenderId) {
+    return { error: 'Cannot block on your own turn', state };
+  }
+
+  if (!state.combat.active) {
+    return { error: 'No combat in progress', state };
+  }
+
+  const defenderState = state[defenderId];
+
+  // Find blocker
+  const blocker = defenderState.zones.battlefield.find(m => m.instanceId === blockerId);
+  if (!blocker) {
+    return { error: 'Blocker not found', state };
+  }
+
+  if (blocker.tapped) {
+    return { error: `${blocker.name} is tapped and cannot block`, state };
+  }
+
+  // Find attacker
+  const attacker = state.combat.attackers.find(a => a.instanceId === attackerId);
+  if (!attacker) {
+    return { error: 'Attacker not found', state };
+  }
+
+  // Tap blocker and assign to attacker
+  const newBattlefield = defenderState.zones.battlefield.map(minion => {
+    if (minion.instanceId === blockerId) {
+      return { ...minion, tapped: true };
+    }
+    return minion;
+  });
+
+  let newState = {
+    ...state,
+    [defenderId]: {
+      ...defenderState,
+      zones: {
+        ...defenderState.zones,
+        battlefield: newBattlefield
+      }
+    },
+    combat: {
+      ...state.combat,
+      blockers: {
+        ...state.combat.blockers,
+        [attackerId]: { ...blocker, tapped: true }
+      }
+    }
+  };
+
+  newState = logAction(newState, `${blocker.name} blocks ${attacker.name}`);
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Resolve combat damage
+ * Blocked attackers deal damage to blockers
+ * Unblocked attackers deal damage to defending hero
+ */
+export function resolveCombat(state) {
+  if (!state.combat.active) {
+    return { error: 'No combat in progress', state };
+  }
+
+  const attackerId = state.currentPlayer;
+  const defenderId = attackerId === 'player' ? 'ai' : 'player';
+
+  let newState = { ...state };
+
+  // Process each attacker
+  for (const attacker of state.combat.attackers) {
+    const blocker = state.combat.blockers[attacker.instanceId];
+
+    if (blocker) {
+      // Blocked: Deal damage to each other
+      const attackerDamage = attacker.attack || 0;
+      const blockerDamage = blocker.attack || 0;
+
+      // Damage blocker
+      const updatedBlocker = {
+        ...blocker,
+        currentHealth: blocker.currentHealth - attackerDamage
+      };
+
+      // Damage attacker
+      const updatedAttacker = {
+        ...attacker,
+        currentHealth: attacker.currentHealth - blockerDamage
+      };
+
+      // Update blocker on battlefield
+      newState[defenderId].zones.battlefield = newState[defenderId].zones.battlefield.map(m => {
+        if (m.instanceId === blocker.instanceId) {
+          return updatedBlocker;
+        }
+        return m;
+      });
+
+      // Update attacker on battlefield
+      newState[attackerId].zones.battlefield = newState[attackerId].zones.battlefield.map(m => {
+        if (m.instanceId === attacker.instanceId) {
+          return updatedAttacker;
+        }
+        return m;
+      });
+
+      newState = logAction(newState, `${attacker.name} dealt ${attackerDamage} to ${blocker.name}, ${blocker.name} dealt ${blockerDamage} back`);
+    } else {
+      // Unblocked: Deal damage to defending hero
+      const damage = attacker.attack || 0;
+      newState[defenderId].hero.currentHealth -= damage;
+      newState = logAction(newState, `${attacker.name} dealt ${damage} damage to ${defenderId === 'player' ? 'You' : 'AI'}`);
+
+      // Check win condition
+      if (newState[defenderId].hero.currentHealth <= 0) {
+        newState.gameOver = true;
+        newState.winner = attackerId;
+        newState = logAction(newState, `${attackerId === 'player' ? 'You' : 'AI'} wins!`);
+      }
+    }
+  }
+
+  // Process deaths
+  newState = processDeaths(newState, attackerId);
+  newState = processDeaths(newState, defenderId);
+
+  // End combat
+  newState.combat = {
+    active: false,
+    attackers: [],
+    blockers: {},
+    damageOrder: {}
+  };
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Process minion deaths and award bounties
+ */
+function processDeaths(state, playerId) {
+  const playerState = state[playerId];
+  const opponentId = playerId === 'player' ? 'ai' : 'player';
+
+  // Find dead minions
+  const alive = [];
+  const dead = [];
+
+  playerState.zones.battlefield.forEach(minion => {
+    if (minion.currentHealth <= 0) {
+      dead.push(minion);
+    } else {
+      alive.push(minion);
+    }
+  });
+
+  if (dead.length === 0) {
+    return state;
+  }
+
+  // Move dead minions to graveyard
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      zones: {
+        ...playerState.zones,
+        battlefield: alive,
+        graveyard: [...playerState.zones.graveyard, ...dead]
+      }
+    }
+  };
+
+  // Award bounties to opponent
+  let totalBounty = 0;
+  dead.forEach(minion => {
+    const bounty = minion.bounty || 0;
+    totalBounty += bounty;
+    newState = logAction(newState, `${minion.name} died`);
+  });
+
+  if (totalBounty > 0) {
+    newState[opponentId].hero.gold += totalBounty;
+    newState = logAction(newState, `${opponentId === 'player' ? 'You' : 'AI'} gained ${totalBounty} gold`);
+  }
+
+  return newState;
+}

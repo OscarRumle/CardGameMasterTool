@@ -1,5 +1,5 @@
 // Simple AI - Makes basic legal moves
-import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, GAME_CONSTANTS } from './gameEngine';
+import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, GAME_CONSTANTS } from './gameEngine';
 
 /**
  * AI takes its turn
@@ -75,6 +75,34 @@ export function aiTakeTurn(initialState) {
   }
 
   console.log(`AI performed ${actionsPerformed} actions`);
+
+  // Try to attack with all available minions
+  if (!state.combat.active) {
+    const availableAttackers = state.ai.zones.battlefield.filter(minion => {
+      return !minion.tapped && !minion.summoningSickness;
+    }).map(m => m.instanceId);
+
+    if (availableAttackers.length > 0) {
+      console.log(`AI declaring ${availableAttackers.length} attackers`);
+      const attackResult = declareAttackers(state, 'ai', availableAttackers);
+
+      if (!attackResult.error) {
+        state = attackResult.state;
+        console.log('AI attacks declared');
+      }
+    }
+  }
+
+  // Resolve combat if active
+  if (state.combat.active) {
+    console.log('AI resolving combat');
+    const combatResult = resolveCombat(state);
+
+    if (!combatResult.error) {
+      state = combatResult.state;
+      console.log('Combat resolved');
+    }
+  }
 
   // End AI turn
   state = endTurn(state);

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [selectedCard, setSelectedCard] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [selectedAttackers, setSelectedAttackers] = useState([]);
 
   const playerState = gameState.player;
   const aiState = gameState.ai;
@@ -90,6 +91,49 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     onStateChange(newState);
   };
 
+  const handleToggleAttacker = (minionId) => {
+    if (!isPlayerTurn || gameState.combat.active) return;
+
+    setSelectedAttackers(prev => {
+      if (prev.includes(minionId)) {
+        return prev.filter(id => id !== minionId);
+      } else {
+        return [...prev, minionId];
+      }
+    });
+  };
+
+  const handleDeclareAttack = () => {
+    if (selectedAttackers.length === 0) {
+      showError('Select at least one minion to attack');
+      return;
+    }
+
+    const result = declareAttackers(gameState, 'player', selectedAttackers);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+      setSelectedAttackers([]);
+    }
+  };
+
+  const handleResolveCombat = () => {
+    const result = resolveCombat(gameState);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+
+      // Check for game over
+      if (result.state.gameOver) {
+        onGameOver();
+      }
+    }
+  };
+
   return (
     <div className="w-full h-screen flex bg-gradient-to-b from-zinc-900 to-black overflow-hidden">
       {/* Error Message */}
@@ -126,6 +170,9 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               onPlayCard={handlePlayCard}
               onHeroPower={handleHeroPower}
               onHeroAttack={handleHeroAttack}
+              selectedAttackers={selectedAttackers}
+              onToggleAttacker={handleToggleAttacker}
+              combatActive={gameState.combat.active}
             />
           </div>
         </div>
@@ -133,7 +180,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         {/* Turn Control */}
         <div className="border-t-2 border-zinc-700 bg-zinc-950 p-4">
           <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <div className="flex gap-4">
+            <div className="flex gap-4 items-center">
               <div className="text-amber-500 font-bold">
                 ROUND {gameState.roundNumber} | TURN {gameState.turnNumber}
               </div>
@@ -143,19 +190,44 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               <div className="text-zinc-400">
                 Phase: <span className="text-white uppercase">{gameState.phase}</span>
               </div>
+              {gameState.combat.active && (
+                <div className="text-red-500 font-bold animate-pulse">
+                  ⚔️ COMBAT ACTIVE
+                </div>
+              )}
             </div>
 
-            <button
-              onClick={handleEndTurn}
-              disabled={!isPlayerTurn}
-              className={`px-8 py-3 font-bold rounded-lg transition-all
-                ${isPlayerTurn
-                  ? 'bg-amber-500 text-black hover:bg-amber-400 hover:scale-105'
-                  : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                }`}
-            >
-              END TURN
-            </button>
+            <div className="flex gap-2">
+              {gameState.combat.active && isPlayerTurn && (
+                <button
+                  onClick={handleResolveCombat}
+                  className="px-6 py-3 font-bold rounded-lg bg-red-600 text-white hover:bg-red-500 hover:scale-105 transition-all"
+                >
+                  RESOLVE COMBAT
+                </button>
+              )}
+
+              {!gameState.combat.active && isPlayerTurn && selectedAttackers.length > 0 && (
+                <button
+                  onClick={handleDeclareAttack}
+                  className="px-6 py-3 font-bold rounded-lg bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 transition-all"
+                >
+                  ATTACK ({selectedAttackers.length})
+                </button>
+              )}
+
+              <button
+                onClick={handleEndTurn}
+                disabled={!isPlayerTurn || gameState.combat.active}
+                className={`px-8 py-3 font-bold rounded-lg transition-all
+                  ${isPlayerTurn && !gameState.combat.active
+                    ? 'bg-amber-500 text-black hover:bg-amber-400 hover:scale-105'
+                    : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                  }`}
+              >
+                END TURN
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -218,18 +290,30 @@ function OpponentArea({ state }) {
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack, selectedAttackers, onToggleAttacker, combatActive }) {
   return (
     <div className="space-y-3">
       {/* Player Battlefield */}
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-3 min-h-[120px]">
-        <div className="text-xs text-zinc-500 mb-2">YOUR BATTLEFIELD</div>
+        <div className="text-xs text-zinc-500 mb-2">
+          YOUR BATTLEFIELD
+          {!combatActive && isPlayerTurn && state.zones.battlefield.length > 0 && (
+            <span className="ml-2 text-amber-500">(Click minions to select attackers)</span>
+          )}
+        </div>
         <div className="flex gap-2 flex-wrap">
           {state.zones.battlefield.length === 0 ? (
             <div className="text-zinc-600 text-sm italic">No minions</div>
           ) : (
             state.zones.battlefield.map((minion) => (
-              <MinionCard key={minion.instanceId} minion={minion} isOpponent={false} />
+              <MinionCard
+                key={minion.instanceId}
+                minion={minion}
+                isOpponent={false}
+                isSelected={selectedAttackers.includes(minion.instanceId)}
+                onClick={() => onToggleAttacker(minion.instanceId)}
+                clickable={!combatActive && isPlayerTurn}
+              />
             ))
           )}
         </div>
@@ -374,13 +458,16 @@ function ShopArea({ shop, roundNumber }) {
 }
 
 // Minion Card Component
-function MinionCard({ minion, isOpponent }) {
+function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, clickable = false }) {
   return (
     <div
-      className={`relative w-24 h-28 rounded-lg border-2 p-2 text-xs
+      onClick={clickable ? onClick : undefined}
+      className={`relative w-24 h-28 rounded-lg border-2 p-2 text-xs transition-all
         ${minion.tapped ? 'opacity-50 rotate-90' : ''}
         ${isOpponent ? 'bg-red-900/30 border-red-700' : 'bg-green-900/30 border-green-700'}
         ${minion.summoningSickness ? 'border-yellow-500' : ''}
+        ${isSelected ? 'border-orange-500 border-4 shadow-lg shadow-orange-500/50 scale-110' : ''}
+        ${clickable ? 'cursor-pointer hover:scale-105 hover:shadow-lg' : ''}
       `}
     >
       <div className="font-bold text-white truncate">{minion.name}</div>
