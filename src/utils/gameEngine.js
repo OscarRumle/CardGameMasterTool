@@ -1264,6 +1264,7 @@ export function declareAttackers(state, playerId, attackerIds) {
 /**
  * Declare a blocker for an attacker
  * Blocker must be untapped
+ * Multiple blockers can block the same attacker (gang up)
  */
 export function declareBlocker(state, defenderId, blockerId, attackerId) {
   // Validate
@@ -1273,6 +1274,10 @@ export function declareBlocker(state, defenderId, blockerId, attackerId) {
 
   if (!state.combat.active) {
     return { error: 'No combat in progress', state };
+  }
+
+  if (state.combat.phase !== 'blocking') {
+    return { error: 'Not in blocking phase', state };
   }
 
   const defenderState = state[defenderId];
@@ -1287,20 +1292,29 @@ export function declareBlocker(state, defenderId, blockerId, attackerId) {
     return { error: `${blocker.name} is tapped and cannot block`, state };
   }
 
+  // Check if this blocker is already blocking someone
+  for (const [aId, blockers] of Object.entries(state.combat.blockers)) {
+    if (blockers.some(b => b.instanceId === blockerId)) {
+      return { error: `${blocker.name} is already blocking`, state };
+    }
+  }
+
   // Find attacker
   const attacker = state.combat.attackers.find(a => a.instanceId === attackerId);
   if (!attacker) {
     return { error: 'Attacker not found', state };
   }
 
-  // Assign blocker to attacker (blockers do NOT tap when blocking)
+  // Add blocker to attacker's blocker array (blockers do NOT tap when blocking)
+  const currentBlockers = state.combat.blockers[attackerId] || [];
+
   let newState = {
     ...state,
     combat: {
       ...state.combat,
       blockers: {
         ...state.combat.blockers,
-        [attackerId]: blocker
+        [attackerId]: [...currentBlockers, blocker]
       }
     }
   };
@@ -1311,9 +1325,191 @@ export function declareBlocker(state, defenderId, blockerId, attackerId) {
 }
 
 /**
+ * Remove a blocker assignment (undo block)
+ */
+export function unassignBlocker(state, defenderId, blockerId) {
+  if (state.currentPlayer === defenderId) {
+    return { error: 'Cannot modify blocks on your own turn', state };
+  }
+
+  if (!state.combat.active || state.combat.phase !== 'blocking') {
+    return { error: 'Not in blocking phase', state };
+  }
+
+  // Find and remove the blocker from whichever attacker it's blocking
+  const newBlockers = {};
+  let found = false;
+
+  for (const [attackerId, blockers] of Object.entries(state.combat.blockers)) {
+    const filtered = blockers.filter(b => b.instanceId !== blockerId);
+    if (filtered.length < blockers.length) {
+      found = true;
+    }
+    if (filtered.length > 0) {
+      newBlockers[attackerId] = filtered;
+    }
+  }
+
+  if (!found) {
+    return { error: 'Blocker not found in assignments', state };
+  }
+
+  const newState = {
+    ...state,
+    combat: {
+      ...state.combat,
+      blockers: newBlockers
+    }
+  };
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Confirm blocker assignments and move to next phase
+ * If any attacker has multiple blockers, move to damage order phase
+ * Otherwise, resolve combat immediately
+ */
+export function confirmBlockers(state, defenderId) {
+  if (state.currentPlayer === defenderId) {
+    return { error: 'Cannot confirm blocks on your own turn', state };
+  }
+
+  if (!state.combat.active) {
+    return { error: 'No combat in progress', state };
+  }
+
+  if (state.combat.phase !== 'blocking') {
+    return { error: 'Not in blocking phase', state };
+  }
+
+  // Check if any attacker has multiple blockers
+  const needsDamageOrder = Object.values(state.combat.blockers).some(blockers => blockers.length > 1);
+
+  if (needsDamageOrder) {
+    // Move to damage order phase - attacker must choose order
+    const newState = {
+      ...state,
+      combat: {
+        ...state.combat,
+        phase: 'damage_order'
+      }
+    };
+    return { state: logAction(newState, 'Blockers declared - waiting for attacker to assign damage order'), error: null };
+  } else {
+    // No multi-blocks, resolve combat immediately
+    const newState = {
+      ...state,
+      combat: {
+        ...state.combat,
+        phase: 'resolving'
+      }
+    };
+    return resolveCombat(newState);
+  }
+}
+
+/**
+ * Set damage order for an attacker with multiple blockers
+ * orderedBlockerIds is an array of blocker instance IDs in the order damage should be dealt
+ */
+export function setDamageOrder(state, attackerId, attackerInstanceId, orderedBlockerIds) {
+  if (state.currentPlayer !== attackerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (!state.combat.active) {
+    return { error: 'No combat in progress', state };
+  }
+
+  if (state.combat.phase !== 'damage_order') {
+    return { error: 'Not in damage order phase', state };
+  }
+
+  // Find the attacker
+  const attacker = state.combat.attackers.find(a => a.instanceId === attackerInstanceId);
+  if (!attacker) {
+    return { error: 'Attacker not found', state };
+  }
+
+  // Get blockers for this attacker
+  const blockers = state.combat.blockers[attackerInstanceId] || [];
+
+  if (blockers.length <= 1) {
+    return { error: 'This attacker does not have multiple blockers', state };
+  }
+
+  // Validate all blockers are accounted for
+  if (orderedBlockerIds.length !== blockers.length) {
+    return { error: 'Must order all blockers', state };
+  }
+
+  // Validate all IDs match
+  const blockerIds = blockers.map(b => b.instanceId);
+  for (const id of orderedBlockerIds) {
+    if (!blockerIds.includes(id)) {
+      return { error: 'Invalid blocker ID in order', state };
+    }
+  }
+
+  // Store damage order
+  const newState = {
+    ...state,
+    combat: {
+      ...state.combat,
+      damageOrder: {
+        ...state.combat.damageOrder,
+        [attackerInstanceId]: orderedBlockerIds
+      }
+    }
+  };
+
+  return { state: logAction(newState, `Damage order set for ${attacker.name}`), error: null };
+}
+
+/**
+ * Confirm all damage orders are set and resolve combat
+ */
+export function confirmDamageOrders(state, attackerId) {
+  if (state.currentPlayer !== attackerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (!state.combat.active) {
+    return { error: 'No combat in progress', state };
+  }
+
+  if (state.combat.phase !== 'damage_order') {
+    return { error: 'Not in damage order phase', state };
+  }
+
+  // Check that all attackers with multiple blockers have damage orders set
+  for (const attacker of state.combat.attackers) {
+    const blockers = state.combat.blockers[attacker.instanceId] || [];
+    if (blockers.length > 1) {
+      const order = state.combat.damageOrder[attacker.instanceId];
+      if (!order || order.length !== blockers.length) {
+        return { error: `Must set damage order for ${attacker.name}`, state };
+      }
+    }
+  }
+
+  // All orders set, resolve combat
+  const newState = {
+    ...state,
+    combat: {
+      ...state.combat,
+      phase: 'resolving'
+    }
+  };
+
+  return resolveCombat(newState);
+}
+
+/**
  * Resolve combat damage
- * Blocked attackers deal damage to blockers
- * Unblocked attackers deal damage to defending hero
+ * Handles multiple blockers per attacker
+ * All damage happens simultaneously
  */
 export function resolveCombat(state) {
   if (!state.combat.active) {
@@ -1325,49 +1521,105 @@ export function resolveCombat(state) {
 
   let newState = { ...state };
 
+  // Track damage to apply simultaneously
+  const damageMap = new Map(); // Map<instanceId, damage>
+
   // Process each attacker
   for (const attacker of state.combat.attackers) {
-    const blocker = state.combat.blockers[attacker.instanceId];
+    const blockers = state.combat.blockers[attacker.instanceId] || [];
 
-    if (blocker) {
-      // Blocked: Deal damage to each other
+    if (blockers.length === 0) {
+      // Unblocked: Deal damage to defending hero (armor absorbs first)
+      const damage = attacker.attack || 0;
+      const currentArmor = newState[defenderId].hero.currentArmor;
+      const armorAbsorbed = Math.min(currentArmor, damage);
+      const healthDamage = damage - armorAbsorbed;
+
+      newState[defenderId].hero.currentArmor -= armorAbsorbed;
+      newState[defenderId].hero.currentHealth -= healthDamage;
+
+      if (armorAbsorbed > 0 && healthDamage > 0) {
+        newState = logAction(newState, `${attacker.name} dealt ${damage} damage (${armorAbsorbed} absorbed by armor, ${healthDamage} to health)`);
+      } else if (armorAbsorbed > 0) {
+        newState = logAction(newState, `${attacker.name} dealt ${damage} damage (absorbed by armor)`);
+      } else {
+        newState = logAction(newState, `${attacker.name} dealt ${damage} damage to ${defenderId === 'player' ? 'You' : 'AI'}`);
+      }
+
+    } else if (blockers.length === 1) {
+      // Single blocker: Simple 1v1 combat
+      const blocker = blockers[0];
       const attackerDamage = attacker.attack || 0;
       const blockerDamage = blocker.attack || 0;
 
-      // Damage blocker
-      const updatedBlocker = {
-        ...blocker,
-        currentHealth: blocker.currentHealth - attackerDamage
-      };
-
-      // Damage attacker
-      const updatedAttacker = {
-        ...attacker,
-        currentHealth: attacker.currentHealth - blockerDamage
-      };
-
-      // Update blocker on battlefield
-      newState[defenderId].zones.battlefield = newState[defenderId].zones.battlefield.map(m => {
-        if (m.instanceId === blocker.instanceId) {
-          return updatedBlocker;
-        }
-        return m;
-      });
-
-      // Update attacker on battlefield
-      newState[attackerId].zones.battlefield = newState[attackerId].zones.battlefield.map(m => {
-        if (m.instanceId === attacker.instanceId) {
-          return updatedAttacker;
-        }
-        return m;
-      });
+      // Apply damage to both (simultaneous)
+      damageMap.set(attacker.instanceId, (damageMap.get(attacker.instanceId) || 0) + blockerDamage);
+      damageMap.set(blocker.instanceId, (damageMap.get(blocker.instanceId) || 0) + attackerDamage);
 
       newState = logAction(newState, `${attacker.name} dealt ${attackerDamage} to ${blocker.name}, ${blocker.name} dealt ${blockerDamage} back`);
+
     } else {
-      // Unblocked: Deal damage to defending hero
-      const damage = attacker.attack || 0;
-      newState[defenderId].hero.currentHealth -= damage;
-      newState = logAction(newState, `${attacker.name} dealt ${damage} damage to ${defenderId === 'player' ? 'You' : 'AI'}`);
+      // Multiple blockers: Must assign damage in order
+      const damageOrder = state.combat.damageOrder[attacker.instanceId] || blockers.map(b => b.instanceId);
+      const attackerDamage = attacker.attack || 0;
+      let remainingDamage = attackerDamage;
+
+      // Attacker assigns damage to blockers in order (must assign lethal before next)
+      const orderedBlockers = damageOrder.map(id => blockers.find(b => b.instanceId === id)).filter(Boolean);
+
+      for (const blocker of orderedBlockers) {
+        if (remainingDamage <= 0) break;
+
+        const lethalDamage = blocker.currentHealth;
+        const assignedDamage = Math.min(remainingDamage, lethalDamage);
+
+        damageMap.set(blocker.instanceId, (damageMap.get(blocker.instanceId) || 0) + assignedDamage);
+        remainingDamage -= assignedDamage;
+
+        newState = logAction(newState, `${attacker.name} assigns ${assignedDamage} damage to ${blocker.name}`);
+      }
+
+      // All blockers deal full damage back to attacker (simultaneous)
+      let totalBlockerDamage = 0;
+      for (const blocker of blockers) {
+        totalBlockerDamage += blocker.attack || 0;
+      }
+
+      damageMap.set(attacker.instanceId, (damageMap.get(attacker.instanceId) || 0) + totalBlockerDamage);
+
+      const blockerNames = blockers.map(b => b.name).join(', ');
+      newState = logAction(newState, `${blockerNames} deal ${totalBlockerDamage} damage back to ${attacker.name}`);
+    }
+  }
+
+  // Apply all damage simultaneously
+  for (const [instanceId, damage] of damageMap.entries()) {
+    // Check if minion is on attacker or defender battlefield
+    let found = false;
+
+    // Check attacker battlefield
+    newState[attackerId].zones.battlefield = newState[attackerId].zones.battlefield.map(minion => {
+      if (minion.instanceId === instanceId) {
+        found = true;
+        return {
+          ...minion,
+          currentHealth: minion.currentHealth - damage
+        };
+      }
+      return minion;
+    });
+
+    // Check defender battlefield if not found
+    if (!found) {
+      newState[defenderId].zones.battlefield = newState[defenderId].zones.battlefield.map(minion => {
+        if (minion.instanceId === instanceId) {
+          return {
+            ...minion,
+            currentHealth: minion.currentHealth - damage
+          };
+        }
+        return minion;
+      });
     }
   }
 
@@ -1406,9 +1658,9 @@ export function resolveCombat(state) {
 }
 
 /**
- * Skip blocking phase and go straight to damage
+ * Skip blocking phase (no blocks declared) and resolve combat
  */
-export function skipBlocking(state) {
+export function skipBlocking(state, defenderId) {
   if (!state.combat.active) {
     return { error: 'No combat in progress', state };
   }
@@ -1417,8 +1669,8 @@ export function skipBlocking(state) {
     return { error: 'Not in blocking phase', state };
   }
 
-  // Just resolve combat immediately
-  return resolveCombat(state);
+  // No blockers declared, resolve immediately
+  return confirmBlockers(state, defenderId);
 }
 
 /**

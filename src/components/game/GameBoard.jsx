@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking, raiseMinion, sacrificeMinion, retrieveFromEchoZone, GAME_CONSTANTS } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, unassignBlocker, confirmBlockers, skipBlocking, setDamageOrder, confirmDamageOrders, raiseMinion, sacrificeMinion, retrieveFromEchoZone, GAME_CONSTANTS } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
@@ -8,6 +8,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [selectedAttackers, setSelectedAttackers] = useState([]);
   const [selectedBlocker, setSelectedBlocker] = useState(null);
   const [targetAttacker, setTargetAttacker] = useState(null);
+  const [damageOrders, setDamageOrders] = useState({}); // {attackerId: [blockerId1, blockerId2, ...]}
 
   const playerState = gameState.player;
   const aiState = gameState.ai;
@@ -174,8 +175,8 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
   };
 
-  const handleSkipBlocking = () => {
-    const result = skipBlocking(gameState);
+  const handleConfirmBlockers = () => {
+    const result = confirmBlockers(gameState, 'player');
 
     if (result.error) {
       showError(result.error);
@@ -183,6 +184,64 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
       onStateChange(result.state);
       setSelectedBlocker(null);
       setTargetAttacker(null);
+
+      // Check for game over
+      if (result.state.gameOver) {
+        onGameOver();
+      }
+    }
+  };
+
+  const handleSkipBlocking = () => {
+    const result = skipBlocking(gameState, 'player');
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+      setSelectedBlocker(null);
+      setTargetAttacker(null);
+
+      // Check for game over
+      if (result.state.gameOver) {
+        onGameOver();
+      }
+    }
+  };
+
+  const handleUnassignBlocker = (blockerId) => {
+    const result = unassignBlocker(gameState, 'player', blockerId);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
+  const handleSetDamageOrder = (attackerId, orderedBlockerIds) => {
+    const result = setDamageOrder(gameState, 'player', attackerId, orderedBlockerIds);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+      // Update local state
+      setDamageOrders(prev => ({
+        ...prev,
+        [attackerId]: orderedBlockerIds
+      }));
+    }
+  };
+
+  const handleConfirmDamageOrders = () => {
+    const result = confirmDamageOrders(gameState, 'player');
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+      setDamageOrders({});
 
       // Check for game over
       if (result.state.gameOver) {
@@ -276,6 +335,23 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         {/* Bottom Section - Player */}
         <div className="flex-1 bg-zinc-900/50 p-4 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
+            {/* Blocker Assignments Display (during blocking phase for defender) */}
+            {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
+              <BlockerAssignmentsUI
+                combat={gameState.combat}
+                onUnassign={handleUnassignBlocker}
+              />
+            )}
+
+            {/* Damage Order UI (for attacker when multiple blockers) */}
+            {gameState.combat.active && gameState.combat.phase === 'damage_order' && isPlayerTurn && (
+              <DamageOrderUI
+                combat={gameState.combat}
+                damageOrders={damageOrders}
+                onSetOrder={handleSetDamageOrder}
+              />
+            )}
+
             <PlayerArea
               state={playerState}
               isPlayerTurn={isPlayerTurn}
@@ -311,19 +387,42 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               </div>
               {gameState.combat.active && (
                 <div className="text-red-500 font-bold animate-pulse">
-                  ⚔️ {gameState.combat.phase === 'blocking' ? 'BLOCKING PHASE' : 'COMBAT ACTIVE'}
+                  ⚔️ {
+                    gameState.combat.phase === 'blocking' ? 'BLOCKING PHASE' :
+                    gameState.combat.phase === 'damage_order' ? 'ASSIGN DAMAGE ORDER' :
+                    gameState.combat.phase === 'resolving' ? 'RESOLVING COMBAT' :
+                    'COMBAT ACTIVE'
+                  }
                 </div>
               )}
             </div>
 
             <div className="flex gap-2">
-              {/* Blocking phase - defender can block or skip */}
+              {/* Blocking phase - defender assigns blockers */}
               {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
+                <>
+                  <button
+                    onClick={handleSkipBlocking}
+                    className="px-6 py-3 font-bold rounded-lg bg-gray-600 text-white hover:bg-gray-500 hover:scale-105 transition-all"
+                  >
+                    NO BLOCKS
+                  </button>
+                  <button
+                    onClick={handleConfirmBlockers}
+                    className="px-6 py-3 font-bold rounded-lg bg-green-600 text-white hover:bg-green-500 hover:scale-105 transition-all"
+                  >
+                    DONE BLOCKING
+                  </button>
+                </>
+              )}
+
+              {/* Damage order phase - attacker assigns order */}
+              {gameState.combat.active && gameState.combat.phase === 'damage_order' && isPlayerTurn && (
                 <button
-                  onClick={handleSkipBlocking}
-                  className="px-6 py-3 font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-500 hover:scale-105 transition-all"
+                  onClick={handleConfirmDamageOrders}
+                  className="px-6 py-3 font-bold rounded-lg bg-red-600 text-white hover:bg-red-500 hover:scale-105 transition-all animate-pulse"
                 >
-                  NO BLOCKS / RESOLVE
+                  CONFIRM DAMAGE ORDER
                 </button>
               )}
 
@@ -403,7 +502,8 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
           </div>
           <div className="flex gap-2 flex-wrap">
             {combat.attackers.map((attacker) => {
-              const isBlocked = combat.blockers[attacker.instanceId];
+              const blockers = combat.blockers[attacker.instanceId] || [];
+              const blockCount = blockers.length;
               return (
                 <div key={attacker.instanceId} className="relative">
                   <MinionCard
@@ -412,10 +512,10 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
                     onClick={() => selectedBlocker && onAttackerSelect(attacker.instanceId)}
                     clickable={selectedBlocker !== null}
                   />
-                  {isBlocked && (
+                  {blockCount > 0 && (
                     <div className="absolute -bottom-2 left-0 right-0 text-center">
-                      <div className="bg-blue-600 text-white text-[8px] font-bold px-1 py-0.5 rounded">
-                        BLOCKED
+                      <div className={`${blockCount > 1 ? 'bg-purple-600' : 'bg-blue-600'} text-white text-[8px] font-bold px-1 py-0.5 rounded`}>
+                        {blockCount === 1 ? 'BLOCKED' : `BLOCKED x${blockCount}`}
                       </div>
                     </div>
                   )}
@@ -815,6 +915,150 @@ function ShopCard({ item, canAfford, isPlayerTurn, onClick }) {
           <div className="text-red-400 font-bold text-[9px]">NO GOLD</div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Blocker Assignments UI - Shows current blocker assignments with ability to unassign
+function BlockerAssignmentsUI({ combat, onUnassign }) {
+  const hasAssignments = Object.keys(combat.blockers).some(attackerId => combat.blockers[attackerId].length > 0);
+
+  if (!hasAssignments) return null;
+
+  return (
+    <div className="bg-blue-900/30 border-2 border-blue-600 rounded-lg p-3 mb-3">
+      <div className="text-xs text-blue-400 font-bold mb-2">
+        YOUR BLOCKER ASSIGNMENTS (Click X to remove)
+      </div>
+      <div className="space-y-2">
+        {combat.attackers.map((attacker) => {
+          const blockers = combat.blockers[attacker.instanceId] || [];
+          if (blockers.length === 0) return null;
+
+          return (
+            <div key={attacker.instanceId} className="flex items-center gap-2 bg-zinc-800/50 rounded p-2">
+              <div className="text-white text-sm font-bold min-w-[100px]">
+                {attacker.name} ({attacker.attack}/{attacker.currentHealth})
+              </div>
+              <div className="text-zinc-400 text-sm">blocked by:</div>
+              <div className="flex gap-1 flex-wrap">
+                {blockers.map((blocker) => (
+                  <div key={blocker.instanceId} className="bg-green-700 text-white text-xs rounded px-2 py-1 flex items-center gap-1">
+                    {blocker.name} ({blocker.attack}/{blocker.currentHealth})
+                    <button
+                      onClick={() => onUnassign(blocker.instanceId)}
+                      className="ml-1 text-red-400 hover:text-red-300 font-bold"
+                      title="Remove this blocker"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Damage Order UI - Allows attacker to set damage order for multi-blocked attackers
+function DamageOrderUI({ combat, damageOrders, onSetOrder }) {
+  const [localOrders, setLocalOrders] = useState({});
+
+  // Find attackers with multiple blockers
+  const multiBlockedAttackers = combat.attackers.filter(attacker => {
+    const blockers = combat.blockers[attacker.instanceId] || [];
+    return blockers.length > 1;
+  });
+
+  if (multiBlockedAttackers.length === 0) return null;
+
+  const handleMoveBlocker = (attackerId, blockerIndex, direction) => {
+    const blockers = combat.blockers[attackerId] || [];
+    const currentOrder = localOrders[attackerId] || blockers.map(b => b.instanceId);
+
+    const newOrder = [...currentOrder];
+    const targetIndex = blockerIndex + direction;
+
+    if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+
+    // Swap
+    [newOrder[blockerIndex], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[blockerIndex]];
+
+    setLocalOrders(prev => ({ ...prev, [attackerId]: newOrder }));
+  };
+
+  const handleConfirmOrder = (attackerId) => {
+    const blockers = combat.blockers[attackerId] || [];
+    const order = localOrders[attackerId] || blockers.map(b => b.instanceId);
+    onSetOrder(attackerId, order);
+  };
+
+  return (
+    <div className="bg-red-900/30 border-2 border-red-600 rounded-lg p-3 mb-3">
+      <div className="text-xs text-red-400 font-bold mb-2">
+        ASSIGN DAMAGE ORDER (Set order for blockers - damage must be lethal to first before damaging next)
+      </div>
+      <div className="space-y-3">
+        {multiBlockedAttackers.map((attacker) => {
+          const blockers = combat.blockers[attacker.instanceId] || [];
+          const currentOrder = localOrders[attacker.instanceId] || blockers.map(b => b.instanceId);
+          const orderedBlockers = currentOrder.map(id => blockers.find(b => b.instanceId === id)).filter(Boolean);
+          const isSet = damageOrders[attacker.instanceId] && damageOrders[attacker.instanceId].length > 0;
+
+          return (
+            <div key={attacker.instanceId} className="bg-zinc-800/50 rounded p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-white text-sm font-bold">
+                  {attacker.name} ({attacker.attack} damage) blocked by {blockers.length} minions:
+                </div>
+                <button
+                  onClick={() => handleConfirmOrder(attacker.instanceId)}
+                  className={`px-3 py-1 text-xs font-bold rounded ${
+                    isSet
+                      ? 'bg-green-600 text-white'
+                      : 'bg-amber-600 text-black hover:bg-amber-500'
+                  }`}
+                >
+                  {isSet ? '✓ SET' : 'CONFIRM ORDER'}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-zinc-400 text-xs">Damage order:</div>
+                <div className="flex gap-2">
+                  {orderedBlockers.map((blocker, index) => (
+                    <div key={blocker.instanceId} className="flex items-center gap-1">
+                      <div className="bg-green-700 text-white text-xs rounded px-2 py-1">
+                        #{index + 1}: {blocker.name} ({blocker.currentHealth} HP)
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <button
+                          onClick={() => handleMoveBlocker(attacker.instanceId, index, -1)}
+                          disabled={index === 0}
+                          className="text-white text-xs hover:text-amber-400 disabled:text-zinc-600 disabled:cursor-not-allowed"
+                          title="Move earlier"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => handleMoveBlocker(attacker.instanceId, index, 1)}
+                          disabled={index === orderedBlockers.length - 1}
+                          className="text-white text-xs hover:text-amber-400 disabled:text-zinc-600 disabled:cursor-not-allowed"
+                          title="Move later"
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

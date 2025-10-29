@@ -1,5 +1,5 @@
 // Simple AI - Makes basic legal moves
-import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, purchaseEquipment, declareBlocker, skipBlocking, GAME_CONSTANTS } from './gameEngine';
+import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, purchaseEquipment, declareBlocker, confirmBlockers, setDamageOrder, confirmDamageOrders, GAME_CONSTANTS } from './gameEngine';
 
 /**
  * AI takes its turn
@@ -150,16 +150,17 @@ export function aiTakeTurn(initialState) {
     const sortedAttackers = [...state.combat.attackers].sort((a, b) => (b.attack || 0) - (a.attack || 0));
 
     // Assign blockers to biggest attackers
+    // Simple strategy: assign 1 blocker per attacker, prioritizing biggest threats
+    // Could gang up on big attackers in the future for smarter AI
     for (const attacker of sortedAttackers) {
       if (availableBlockers.length === 0) break;
 
-      // Skip if already blocked
-      if (state.combat.blockers[attacker.instanceId]) continue;
+      const attackerDamage = attacker.attack || 0;
+      const currentBlockers = state.combat.blockers[attacker.instanceId] || [];
 
       // Find a suitable blocker (prefer minions that can survive or trade favorably)
       const blocker = availableBlockers.find(minion => {
         const minionHealth = minion.currentHealth || minion.health;
-        const attackerDamage = attacker.attack || 0;
         // Block if we can survive OR if we're going to die anyway (trade)
         return minionHealth > attackerDamage || minionHealth <= attackerDamage;
       });
@@ -176,11 +177,48 @@ export function aiTakeTurn(initialState) {
       }
     }
 
-    // Done blocking, resolve combat
-    const skipResult = skipBlocking(state);
-    if (!skipResult.error) {
-      state = skipResult.state;
-      console.log('AI finished blocking, combat resolved');
+    // Done blocking, confirm blockers
+    const confirmResult = confirmBlockers(state, 'ai');
+    if (!confirmResult.error) {
+      state = confirmResult.state;
+      console.log('AI confirmed blockers');
+    } else {
+      console.log(`AI confirm blockers failed: ${confirmResult.error}`);
+    }
+  }
+
+  // Handle damage order if AI is attacking and has multi-blocked attackers
+  if (state.combat.active && state.combat.phase === 'damage_order' && state.currentPlayer === 'ai') {
+    console.log('AI setting damage orders for multi-blocked attackers');
+
+    // For each attacker with multiple blockers, set damage order
+    for (const attacker of state.combat.attackers) {
+      const blockers = state.combat.blockers[attacker.instanceId] || [];
+
+      if (blockers.length > 1) {
+        // Simple strategy: order by lowest health first (kill as many as possible)
+        const orderedBlockers = [...blockers].sort((a, b) =>
+          (a.currentHealth || a.health) - (b.currentHealth || b.health)
+        );
+        const orderedIds = orderedBlockers.map(b => b.instanceId);
+
+        const orderResult = setDamageOrder(state, 'ai', attacker.instanceId, orderedIds);
+        if (!orderResult.error) {
+          state = orderResult.state;
+          console.log(`AI set damage order for ${attacker.name}`);
+        } else {
+          console.log(`AI damage order failed: ${orderResult.error}`);
+        }
+      }
+    }
+
+    // Confirm all damage orders
+    const confirmResult = confirmDamageOrders(state, 'ai');
+    if (!confirmResult.error) {
+      state = confirmResult.state;
+      console.log('AI confirmed damage orders');
+    } else {
+      console.log(`AI confirm damage orders failed: ${confirmResult.error}`);
     }
   }
 
