@@ -1,11 +1,43 @@
-Card Name,Mana Cost,Card Type,Attack,Health,Bounty,Effect,Copies
-Berserker,1,Minion,2,1,1g,Gains +1 attack when damaged,3
-Axe Thrower,2,Minion,3,2,2g,Deal 1 damage to a random enemy,3
-Battle Rage,2,Spell,,,,Draw 2 cards for each damaged friendly minion,2
-Raging Warrior,3,Minion,3,3,3g,Enrage: +2 attack,3
-Whirlwind,1,Spell,,,,Deal 1 damage to all minions,2
-Shield Bash,3,Spell,,,,Deal 3 damage and gain 3 armor,2
-Warlord,5,Minion,5,5,5g,Nearby allies have +1 attack,2
-Execute,2,Spell,,,,Destroy a damaged minion,2
-Cleave,4,Spell,,,,Deal 5 damage to two random enemies,1
-Charge,1,Spell,,,,Give a minion +2 attack this turn,3
+﻿Card Name,Card Type,Copies,Mana Cost,Attack,Health,Effect,Bounty,State
+Warlord,Minion,1,6,5,6,When this enters: Gain 3 Fury and 3 Armor,3,
+Champion of Rage,Minion,1,5,4,4,Your minions have +1/+1 while you have 3+ Fury,3,
+Armored Vanguard,Minion,1,4,3,5,When this is played: Gain Armor equal to your current Fury,2,
+War Chief,Minion,2,4,4,4,Your Hero Power costs 1 less while you have 4+ Armor,2,
+War Chief,Minion,2,4,4,4,Your Hero Power costs 1 less while you have 4+ Armor,2,
+Bloodbound Warrior,Minion,2,3,2,4,Empower: When you gain Fury this gets +1/+1,2,
+Bloodbound Warrior,Minion,2,3,2,4,Empower: When you gain Fury this gets +1/+1,2,
+Fury Berserker,Minion,2,3,3,3,When you Weapon Attack at 3+ Fury: This gets +2/+2 until end of turn,2,
+Fury Berserker,Minion,2,3,3,3,When you Weapon Attack at 3+ Fury: This gets +2/+2 until end of turn,2,
+Reckless Raider,Minion,2,2,3,2,Prepared. When this kills a minion: Gain 1 Fury,1,
+Reckless Raider,Minion,2,2,3,2,Prepared. When this kills a minion: Gain 1 Fury,1,
+Iron Guard,Minion,2,2,1,4,When this blocks: Gain 1 Armor,1,
+Iron Guard,Minion,2,2,1,4,When this blocks: Gain 1 Armor,1,
+Battle Drummer,Minion,3,2,2,2,When this attacks and survives: Gain 1 Fury,1,
+Battle Drummer,Minion,3,2,2,2,When this attacks and survives: Gain 1 Fury,1,
+Battle Drummer,Minion,3,2,2,2,When this attacks and survives: Gain 1 Fury,1,
+Shield Bearer,Minion,2,1,1,3,When you gain Armor: This gets +1/+1 until end of turn,1,
+Shield Bearer,Minion,2,1,1,3,When you gain Armor: This gets +1/+1 until end of turn,1,
+Shield Bearer,Minion,2,1,1,3,When you gain Armor: This gets +1/+1 until end of turn,1,
+Fury Initiate,Minion,3,1,2,1,Gain 1 Fury when this is played,1,
+Fury Initiate,Minion,3,1,2,1,Gain 1 Fury when this is played,1,
+Fury Initiate,Minion,3,1,2,1,Gain 1 Fury when this is played,1,
+Fortress,Spell,1,6,,,Gain 8 Armor. Your Armor can't be reduced below 5 this turn,,
+Bloodlust,Spell,2,5,,,Gain Fury equal to your Armor. Your next Weapon Attack this turn costs 0,,
+Bloodlust,Spell,2,5,,,Gain Fury equal to your Armor. Your next Weapon Attack this turn costs 0,,
+Whirlwind,Spell,1,3,,,Deal 1 damage to all minions. Gain 1 Fury for each enemy minion damaged,,
+Rage Strike,Spell,1,3,,,Deal damage to any target equal to your current Fury. Don't spend Fury,,
+Shield Slam,Spell,2,3,,,Deal damage to target enemy minion equal to your Armor,,
+Shield Slam,Spell,2,3,,,Deal damage to target enemy minion equal to your Armor,,
+Rallying Shout,Spell,2,2,,,Gain 3 Armor. Your minions have +1/+1 until end of turn,,
+Rallying Shout,Spell,2,2,,,Gain 3 Armor. Your minions have +1/+1 until end of turn,,
+Quick Strike,Spell,2,1,,,Deal 2 damage to target enemy minion. Gain 1 Fury if it dies,,
+Quick Strike,Spell,2,1,,,Deal 2 damage to target enemy minion. Gain 1 Fury if it dies,,
+Battle Cry,Spell,2,1,,,Gain 2 Fury,,
+Battle Cry,Spell,2,1,,,Gain 2 Fury,,
+Attack II,Upgrade,1,3,,,Devastating Blow - Attack becomes: Cost 2 mana: Deal (weapon damage + Fury) to target. When you attack at 5+ Fury: This costs 0 instead,,
+Hero Power II,Upgrade,1,3,,,Berserker's Roar - Hero Power becomes: Cost 1 mana: Gain 2 Armor and 1 Fury,,
+Rampage,Ultimate,2,6,,,Gain Fury equal to your Armor. Your Weapon Attack costs 0 this turn and can be used an additional time,,
+Rampage,Ultimate,2,6,,,Gain Fury equal to your Armor. Your Weapon Attack costs 0 this turn and can be used an additional time,,
+Level Up:,Core,1,,,,Condition: Deal 15+ damage with Weapon Attacks - track on d20. Passive Bonus: Your Weapon Attacks deal bonus damage equal to your Armor. Unlocks: Ultimate cards,,
+Attack,Core,1,2,,,"Weapon Strike - Deal weapon damage to target enemy minion or hero. Take damage back equal to their Attack/weapon. When you use this, spend ALL Fury for bonus damage",,
+Hero Power,Core,1,1,,,War Cry - Gain 2 Armor,,

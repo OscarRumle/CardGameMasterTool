@@ -1,11 +1,47 @@
-Card Name,Mana Cost,Card Type,Attack,Health,Bounty,Effect,Copies
-Mage Apprentice,1,Minion,1,1,1g,Draw a card,3
-Fire Elemental,2,Minion,3,2,2g,Deal 1 damage when summoned,3
-Arcane Scholar,3,Minion,2,4,3g,Gain +1 spell damage,2
-Fireball,3,Spell,,,,"Deal 4 damage to any target",2
-Ice Blast,2,Spell,,,,"Freeze a minion, it can't attack next turn",2
-Archmage,5,Minion,4,4,5g,Spells cost 1 less mana,2
-Flame Strike,6,Spell,,,,Deal 3 damage to all enemy minions,1
-Frost Nova,3,Spell,,,,Freeze all enemy minions,2
-Mystic Bolt,1,Spell,,,,Deal 2 damage,3
-Mana Wyrm,1,Minion,1,2,1g,Gain +1 attack when you cast a spell,3
+﻿Name,Card Type,Copies,Mana Cost,Attack,Health,Effect,Bounty,State
+Level Up,Core,1,0,0,0,Condition: Cast 15 spells. Passive: Your spells cost 1 less. Unlocks: Ultimate cards,0,
+Attack,Core,1,2,0,0,Cost 2 mana: Deal weapon damage to target enemy minion or hero. Take damage back equal to their Attack/weapon,0,
+Hero Power,Core,1,1,0,0,Cost 1 mana: Gain 1 Arcana,0,
+Time Cascade,Ultimate,1,8,0,0,Recast all spells in your Echo Zone without paying their costs. They return to your Echo Zone afterward,0,
+Attack II,Upgrade,1,3,0,0,Attack becomes: Cost 2 mana: Deal weapon damage +1 to target. 5+ Arcana: This costs 0 instead,0,
+Hero Power II,Upgrade,1,3,0,0,Hero Power becomes: Cost 1 mana: Gain 1 Arcana and draw a card,0,
+Time Stop,Spell,1,6,0,0,Return all enemy minions to their owner's hand. Gain 3 Arcana,0,
+Arcane Explosion,Spell,1,5,0,0,Deal damage to all enemy minions equal to your Arcana,0,
+Chain Lightning,Spell,1,4,0,0,Deal 3 damage to target enemy minion and 2 damage to another random enemy minion,0,
+Master Arcanist,Minion,1,6,5,5,When you cast a spell if you have 6+ Arcana deal 2 damage to all enemy minions,3,
+Archmage Familiar,Minion,1,4,2,5,Your spells cost 1 less while you have 5+ Arcana,2,
+"Mana Sprite ",Minion,2,1,2,1,When played: Gain 1 Arcana,1,
+"Arcane Scholar ",Minion,2,2,1,4,Whenever you gain Arcana draw a card. This ability triggers once per turn,1,
+"Frost Elemental ",Minion,2,3,2,4,When you cast a spell deal 1 damage to a random enemy minion,2,
+"Arcane Channeler ",Minion,2,3,3,3,3+ Arcana: This has +2/+2,2,
+"Spellblade ",Minion,2,4,3,4,Empower: When you gain Arcana this gets +1/+1,2,
+"Arcane Golem ",Minion,2,5,4,5,When played: Gain 2 Arcana,3,
+"Spark ",Spell,2,1,0,0,Deal 2 damage to target enemy minion,0,
+"Arcane Insight ",Spell,2,1,0,0,Gain 2 Arcana,0,
+Mana Surge,Spell,2,2,0,0,Draw 2 cards. Gain 1 Arcana,0,
+"Arcane Missiles ",Spell,2,3,0,0,Deal 1 damage three times to random enemy minions. 4+ Arcana: Deal 2 damage three times instead,0,
+"Polymorph ",Spell,2,4,0,0,Transform target enemy minion into a 1/1 Sheep token,0,
+Arcane Intellect,Spell,2,4,0,0,Draw 3 cards,0,
+Pyroblast,Ultimate,2,7,0,0,Deal 10 damage to any target. 8+ Arcana: Deal 15 instead,0,
+Pyroblast,Ultimate,2,7,0,0,Deal 10 damage to any target. 8+ Arcana: Deal 15 instead,0,
+Blizzard,Spell,2,5,0,0,Deal 2 damage to all enemy minions. 6+ Arcana: Deal 4 to all enemy minions instead,0,
+Arcane Intellect,Spell,2,4,0,0,Draw 3 cards,0,
+Polymorph,Spell,2,4,0,0,Transform target enemy minion into a 1/1 Sheep token,0,
+Arcane Missiles,Spell,2,3,0,0,Deal 1 damage three times to random enemy minions. 4+ Arcana: Deal 2 damage three times instead,0,
+Mana Surge,Spell,2,2,0,0,Draw 2 cards. Gain 1 Arcana,0,
+Arcane Insight,Spell,2,1,0,0,Gain 2 Arcana,0,
+Spark,Spell,2,1,0,0,Deal 2 damage to target enemy minion,0,
+Arcane Golem,Minion,2,5,4,5,When played: Gain 2 Arcana,3,
+Spellblade,Minion,2,4,3,4,Empower: When you gain Arcana this gets +1/+1,2,
+Arcane Channeler,Minion,2,3,3,3,3+ Arcana: This has +2/+2,2,
+Frost Elemental,Minion,2,3,2,4,When you cast a spell deal 1 damage to a random enemy minion,2,
+Arcane Scholar,Minion,2,2,1,4,Whenever you gain Arcana draw a card. This ability triggers once per turn,1,
+Mana Sprite,Minion,2,1,2,1,When played: Gain 1 Arcana,1,
+"Arcane Apprentice ",Minion,3,1,1,3,When you cast a spell this gains +1 Attack until end of turn,1,
+"Spellweaver ",Minion,3,2,2,3,When you cast a spell gain 1 Armor,1,
+"Frost Bolt ",Spell,3,2,0,0,Deal 3 damage to target enemy minion. 3+ Arcana: Deal 5 instead,0,
+"Fireball ",Spell,3,3,0,0,Deal 4 damage to any target. 5+ Arcana: Deal 7 instead,0,
+Fireball,Spell,3,3,0,0,Deal 4 damage to any target. 5+ Arcana: Deal 7 instead,0,
+Frost Bolt,Spell,3,2,0,0,Deal 3 damage to target enemy minion. 3+ Arcana: Deal 5 instead,0,
+Spellweaver,Minion,3,2,2,3,When you cast a spell gain 1 Armor,1,
+Arcane Apprentice,Minion,3,1,1,3,When you cast a spell this gains +1 Attack until end of turn,1,
