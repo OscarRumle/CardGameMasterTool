@@ -22,21 +22,32 @@ const MyDecksTab = ({ decks, onCreateDeck, onViewDeck, onExportDeck, onDeleteDec
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {decks.map(deck => (
-            <div key={deck.id} className="bg-zinc-900 border-2 border-zinc-800 hover:border-zinc-700 p-6 transition">
+            <div key={deck.id} className={`bg-zinc-900 border-2 p-6 transition ${
+              deck.isSample ? 'border-blue-800 hover:border-blue-700' : 'border-zinc-800 hover:border-zinc-700'
+            }`}>
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-white mb-2 tracking-wide">{deck.name}</h3>
-                  <span className={`text-xs px-2 py-1 border ${
-                    deck.type === 'hero'
-                      ? 'border-green-600 text-green-400'
-                      : 'border-amber-600 text-amber-400'
-                  } tracking-wider`}>
-                    {deck.type === 'hero' ? 'HERO DECK' : 'EQUIPMENT DECK'}
-                  </span>
+                  <div className="flex gap-2 flex-wrap">
+                    <span className={`text-xs px-2 py-1 border ${
+                      deck.type === 'hero'
+                        ? 'border-green-600 text-green-400'
+                        : 'border-amber-600 text-amber-400'
+                    } tracking-wider`}>
+                      {deck.type === 'hero' ? 'HERO DECK' : 'EQUIPMENT DECK'}
+                    </span>
+                    {deck.isSample && (
+                      <span className="text-xs px-2 py-1 border border-blue-600 text-blue-400 tracking-wider">
+                        SAMPLE
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <button onClick={() => onDeleteDeck(deck.id)} className="text-red-500 hover:text-red-400 transition">
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                {!deck.isSample && (
+                  <button onClick={() => onDeleteDeck(deck.id)} className="text-red-500 hover:text-red-400 transition">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </div>
 
               <div className="text-zinc-500 text-sm mb-4 flex items-center gap-2">

@@ -1,0 +1,11 @@
+Card Name,Mana Cost,Card Type,Attack,Health,Bounty,Effect,Copies
+Berserker,1,Minion,2,1,1g,Gains +1 attack when damaged,3
+Axe Thrower,2,Minion,3,2,2g,Deal 1 damage to a random enemy,3
+Battle Rage,2,Spell,,,,Draw 2 cards for each damaged friendly minion,2
+Raging Warrior,3,Minion,3,3,3g,Enrage: +2 attack,3
+Whirlwind,1,Spell,,,,Deal 1 damage to all minions,2
+Shield Bash,3,Spell,,,,Deal 3 damage and gain 3 armor,2
+Warlord,5,Minion,5,5,5g,Nearby allies have +1 attack,2
+Execute,2,Spell,,,,Destroy a damaged minion,2
+Cleave,4,Spell,,,,Deal 5 damage to two random enemies,1
+Charge,1,Spell,,,,Give a minion +2 attack this turn,3

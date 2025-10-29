@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { parseCSV } from './utils/csvParser';
 import { analyzeDeck } from './utils/deckAnalyzer';
 import { getDefaultCustomization } from './utils/customization';
+import { loadSampleDecks } from './utils/loadSampleDecks';
 import HomeTab from './components/tabs/HomeTab';
 import MyDecksTab from './components/tabs/MyDecksTab';
 import DeckViewTab from './components/tabs/DeckViewTab';
@@ -11,8 +12,10 @@ import TextTweaksTab from './components/tabs/TextTweaksTab';
 import CreateDeckModal from './components/modals/CreateDeckModal';
 import CustomizeModal from './components/modals/CustomizeModal';
 import DeleteConfirmModal from './components/modals/DeleteConfirmModal';
+import GameMode from './components/game/GameMode';
 
 function App() {
+  const [mode, setMode] = useState('tool'); // 'tool' or 'game'
   const [currentTab, setCurrentTab] = useState('home');
   const [decks, setDecks] = useState([]);
   const [selectedDeck, setSelectedDeck] = useState(null);
@@ -20,6 +23,7 @@ function App() {
   const [showCustomize, setShowCustomize] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deckToDelete, setDeckToDelete] = useState(null);
+  const [sampleDecksLoaded, setSampleDecksLoaded] = useState(false);
 
   const [newDeckName, setNewDeckName] = useState('');
   const [newDeckType, setNewDeckType] = useState('hero');
@@ -52,10 +56,29 @@ function App() {
     if (savedTextSettings) setTextSettings(JSON.parse(savedTextSettings));
   }, []);
 
-  // Save to localStorage
+  // Load sample decks after initial load
   useEffect(() => {
-    if (decks.length > 0) {
-      localStorage.setItem('cardDecks', JSON.stringify(decks));
+    if (!sampleDecksLoaded && decks.length >= 0) {
+      loadSampleDecks(parseCSV, decks).then(newSampleDecks => {
+        if (newSampleDecks.length > 0) {
+          console.log(`Adding ${newSampleDecks.length} sample decks to the deck list`);
+          setDecks(prevDecks => [...prevDecks, ...newSampleDecks]);
+        }
+        setSampleDecksLoaded(true);
+      }).catch(error => {
+        console.error('Error loading sample decks:', error);
+        setSampleDecksLoaded(true);
+      });
+    }
+  }, [decks.length, sampleDecksLoaded]);
+
+  // Save to localStorage (exclude sample decks)
+  useEffect(() => {
+    // Only save user-created decks, not sample decks
+    const userDecks = decks.filter(deck => !deck.isSample);
+
+    if (userDecks.length > 0) {
+      localStorage.setItem('cardDecks', JSON.stringify(userDecks));
     } else {
       localStorage.removeItem('cardDecks');
     }
@@ -219,31 +242,41 @@ function App() {
     <div className="min-h-screen bg-black">
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-8">
-          <nav className="flex gap-1">
-            {[
-              ['home', 'HOME'],
-              ['view', 'MY DECKS'],
-              ['balancing', 'BALANCING'],
-              ['text-tweaks', 'TEXT TWEAKS']
-            ].map(([tab, label]) => (
-              <button
-                key={tab}
-                onClick={() => setCurrentTab(tab)}
-                className={`px-6 py-4 font-bold transition border-b-2 ${
-                  currentTab === tab || (tab === 'view' && ['deck-view', 'export'].includes(currentTab))
-                    ? 'text-amber-500 border-amber-500 bg-zinc-900/50'
-                    : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center justify-between">
+            <nav className="flex gap-1">
+              {[
+                ['home', 'HOME'],
+                ['view', 'MY DECKS'],
+                ['balancing', 'BALANCING'],
+                ['text-tweaks', 'TEXT TWEAKS']
+              ].map(([tab, label]) => (
+                <button
+                  key={tab}
+                  onClick={() => setCurrentTab(tab)}
+                  className={`px-6 py-4 font-bold transition border-b-2 ${
+                    currentTab === tab || (tab === 'view' && ['deck-view', 'export'].includes(currentTab))
+                      ? 'text-amber-500 border-amber-500 bg-zinc-900/50'
+                      : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-700'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            <button
+              onClick={() => setMode(mode === 'tool' ? 'game' : 'tool')}
+              className="px-6 py-3 font-bold bg-amber-500 text-black rounded-lg hover:bg-amber-400 transition-all shadow-lg"
+            >
+              {mode === 'tool' ? '🎮 PLAY GAME' : '🔧 BACK TO TOOL'}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-8">
-        {currentTab === 'home' && (
+      {mode === 'tool' ? (
+        <div className="max-w-7xl mx-auto p-8">
+          {currentTab === 'home' && (
           <HomeTab
             onCreateDeck={() => setShowCreateModal(true)}
             onViewDecks={() => setCurrentTab('view')}
@@ -310,7 +343,10 @@ function App() {
             updateTextSetting={updateTextSetting}
           />
         )}
-      </div>
+        </div>
+      ) : (
+        <GameMode decks={decks} />
+      )}
 
       {/* MODALS */}
       {showCreateModal && (
