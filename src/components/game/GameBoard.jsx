@@ -17,13 +17,24 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [draggedCard, setDraggedCard] = useState(null);
   const [dragOverBattlefield, setDragOverBattlefield] = useState(false);
 
+  // Create a single shared AudioContext
+  const [audioContext] = useState(() => {
+    try {
+      return new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('Web Audio API not supported');
+      return null;
+    }
+  });
+
   // Sound effects using Web Audio API
   const playSound = (soundType) => {
+    if (!audioContext) return;
+
     try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      console.log(`Playing sound: ${soundType}`);
       const gainNode = audioContext.createGain();
       gainNode.connect(audioContext.destination);
-      gainNode.gain.value = 0.15;
 
       if (soundType === 'whoosh') {
         // Whoosh - descending sweep
@@ -32,7 +43,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
         oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.2);
         oscillator.connect(gainNode);
-        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.25, audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + 0.2);
@@ -41,12 +52,12 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         const oscillator = audioContext.createOscillator();
         oscillator.type = 'sine';
         oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.1);
+        oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.15);
         oscillator.connect(gainNode);
-        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        gainNode.gain.setValueAtTime(0.4, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
         oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.1);
+        oscillator.stop(audioContext.currentTime + 0.15);
       } else if (soundType === 'block') {
         // Block - metallic clang
         const oscillator1 = audioContext.createOscillator();
@@ -57,7 +68,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         oscillator2.frequency.setValueAtTime(800, audioContext.currentTime);
         oscillator1.connect(gainNode);
         oscillator2.connect(gainNode);
-        gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
         oscillator1.start(audioContext.currentTime);
         oscillator2.start(audioContext.currentTime);
@@ -65,7 +76,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         oscillator2.stop(audioContext.currentTime + 0.15);
       }
     } catch (e) {
-      // Silently fail if audio doesn't work
+      console.warn('Sound playback failed:', e);
     }
   };
 
@@ -340,6 +351,8 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   };
 
   const handleResolveCombat = () => {
+    console.log('=== RESOLVE COMBAT TRIGGERED ===');
+
     // Trigger animations before resolving combat
     const attackerIds = new Set(gameState.combat.attackers.map(a => a.instanceId));
     const defenderIds = new Set();
@@ -348,6 +361,9 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     Object.values(gameState.combat.blockers).forEach(blockers => {
       blockers.forEach(b => defenderIds.add(b.instanceId));
     });
+
+    console.log('Attackers:', Array.from(attackerIds));
+    console.log('Defenders:', Array.from(defenderIds));
 
     setAnimatingAttackers(attackerIds);
     setAnimatingDefenders(defenderIds);
@@ -365,6 +381,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
 
     // Wait for animations to complete before resolving
     setTimeout(() => {
+      console.log('Resolving combat damage...');
       const result = resolveCombat(gameState);
 
       if (result.error) {
@@ -379,6 +396,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
       }
 
       // Clear animations
+      console.log('Clearing animations');
       setAnimatingAttackers(new Set());
       setAnimatingDefenders(new Set());
     }, 650);
@@ -760,6 +778,33 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 }`}
             >
               END TURN
+            </button>
+
+            {/* Debug Test Button - Remove after testing */}
+            <button
+              onClick={() => {
+                console.log('TEST BUTTON CLICKED');
+                // Test animations
+                const testAttackers = new Set(['test-attacker']);
+                const testDefenders = new Set(['test-defender']);
+                setAnimatingAttackers(testAttackers);
+                setAnimatingDefenders(testDefenders);
+
+                // Test sounds
+                playSound('whoosh');
+                setTimeout(() => playSound('impact'), 300);
+                setTimeout(() => playSound('block'), 400);
+
+                // Clear after animation
+                setTimeout(() => {
+                  setAnimatingAttackers(new Set());
+                  setAnimatingDefenders(new Set());
+                }, 1000);
+              }}
+              className="px-4 py-2 text-xs font-bold rounded bg-purple-600 text-white hover:bg-purple-500"
+              title="Test animations and sounds"
+            >
+              TEST ANIM/SFX
             </button>
           </div>
         </div>
@@ -1192,20 +1237,24 @@ function MinionCard({ minion, isOpponent, isSelected = false, onClick = null, cl
   let animationClass = '';
   if (isAttacking) {
     animationClass = isOpponent ? 'animate-attack-lunge-down' : 'animate-attack-lunge';
+    console.log(`Minion ${minion.name} (${minion.instanceId}) is attacking! Class: ${animationClass}`);
   } else if (isDefending) {
     animationClass = 'animate-hit-impact animate-block-recoil';
+    console.log(`Minion ${minion.name} (${minion.instanceId}) is defending! Class: ${animationClass}`);
   }
 
   return (
     <div
       onClick={clickable ? onClick : undefined}
-      className={`relative w-32 h-40 rounded-lg border-2 p-2 text-sm transition-all
+      className={`relative w-32 h-40 rounded-lg border-2 p-2 text-sm
+        ${!isAttacking && !isDefending ? 'transition-all' : ''}
         ${minion.tapped ? 'opacity-50 rotate-90' : ''}
         ${isOpponent ? 'bg-red-900/30 border-red-700' : 'bg-green-900/30 border-green-700'}
         ${minion.summoningSickness ? 'border-yellow-500' : ''}
         ${isSelected ? 'border-orange-500 border-4 shadow-lg shadow-orange-500/50 scale-110' : ''}
         ${clickable ? 'cursor-pointer hover:scale-105 hover:shadow-lg' : ''}
         ${animationClass}
+        ${isAttacking ? 'z-50' : ''}
       `}
     >
       <div className="font-bold text-white truncate text-sm">{minion.name}</div>
