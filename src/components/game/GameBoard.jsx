@@ -9,6 +9,8 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   const [selectedBlocker, setSelectedBlocker] = useState(null);
   const [targetAttacker, setTargetAttacker] = useState(null);
   const [damageOrders, setDamageOrders] = useState({}); // {attackerId: [blockerId1, blockerId2, ...]}
+  const [shopExpanded, setShopExpanded] = useState(false);
+  const [logExpanded, setLogExpanded] = useState(false);
 
   const playerState = gameState.player;
   const aiState = gameState.ai;
@@ -417,37 +419,92 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         </div>
       )}
 
-      {/* Main Game Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Top Section - AI/Opponent */}
-        <div className="border-b-2 border-zinc-700 bg-zinc-900/50 p-4">
-          <div className="max-w-7xl mx-auto">
-            <OpponentArea
-              state={aiState}
-              combat={gameState.combat}
-              isPlayerTurn={isPlayerTurn}
-              selectedBlocker={selectedBlocker}
-              onAttackerSelect={handleAttackerSelect}
-            />
-          </div>
+      {/* Left Sidebar - Shop */}
+      <div className={`border-r-2 border-zinc-700 bg-zinc-950 flex flex-col transition-all duration-300 ${shopExpanded ? 'w-96' : 'w-16'}`}>
+        <div className="p-2 border-b border-zinc-700 flex items-center justify-between">
+          <button
+            onClick={() => setShopExpanded(!shopExpanded)}
+            className="p-2 hover:bg-zinc-800 rounded transition-all"
+            title={shopExpanded ? 'Collapse Shop' : 'Expand Shop'}
+          >
+            <span className="text-amber-500 text-xl">{shopExpanded ? '◀' : '▶'}</span>
+          </button>
+          {shopExpanded && <h3 className="text-amber-500 font-bold">SHOP</h3>}
         </div>
-
-        {/* Middle Section - Shop */}
-        <div className="border-b-2 border-amber-600/30 bg-gradient-to-r from-amber-900/10 to-orange-900/10 p-3">
-          <div className="max-w-7xl mx-auto">
+        {shopExpanded && (
+          <div className="flex-1 overflow-y-auto p-3">
             <ShopArea
               shop={gameState.shop}
               roundNumber={gameState.roundNumber}
               playerGold={playerState.hero.gold}
               isPlayerTurn={isPlayerTurn}
               onPurchase={handlePurchaseEquipment}
+              compact={false}
             />
+          </div>
+        )}
+        {!shopExpanded && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="transform -rotate-90 whitespace-nowrap text-amber-500 font-bold text-sm">
+              SHOP
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main Game Area */}
+      <div className="flex-1 flex flex-col">
+        {/* Top Section - Turn Info */}
+        <div className="border-b-2 border-zinc-700 bg-zinc-950 p-3">
+          <div className="flex gap-4 items-center justify-center">
+            <div className="text-amber-500 font-bold">
+              ROUND {gameState.roundNumber} | TURN {gameState.turnNumber}
+            </div>
+            <div className={`font-bold ${isPlayerTurn ? 'text-green-400' : 'text-red-400'}`}>
+              {isPlayerTurn ? '● YOUR TURN' : '○ AI TURN'}
+            </div>
+            <div className="text-zinc-400">
+              Phase: <span className="text-white uppercase">{gameState.phase}</span>
+            </div>
+            {gameState.combat.active && (
+              <div className="text-red-500 font-bold animate-pulse">
+                ⚔️ {
+                  gameState.combat.phase === 'blocking' ? 'BLOCKING PHASE' :
+                  gameState.combat.phase === 'damage_order' ? 'ASSIGN DAMAGE ORDER' :
+                  gameState.combat.phase === 'resolving' ? 'RESOLVING COMBAT' :
+                  'COMBAT ACTIVE'
+                }
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Bottom Section - Player */}
-        <div className="flex-1 bg-zinc-900/50 p-4 overflow-y-auto">
-          <div className="max-w-7xl mx-auto">
+        {/* Main Battlefield Area */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Player Hero Panel - Left Side */}
+          <div className="w-72 border-r-2 border-zinc-700 bg-zinc-900/50 p-3 overflow-y-auto">
+            <HeroPanel
+              state={playerState}
+              isPlayer={true}
+              isPlayerTurn={isPlayerTurn}
+              onHeroPower={handleHeroPower}
+              onHeroAttack={handleHeroAttack}
+            />
+          </div>
+
+          {/* Center Battlefield */}
+          <div className="flex-1 flex flex-col bg-zinc-900/50 p-4 overflow-y-auto">
+            {/* Opponent Area */}
+            <div className="mb-4">
+              <OpponentArea
+                state={aiState}
+                combat={gameState.combat}
+                isPlayerTurn={isPlayerTurn}
+                selectedBlocker={selectedBlocker}
+                onAttackerSelect={handleAttackerSelect}
+              />
+            </div>
+
             {/* Blocker Assignments Display (during blocking phase for defender) */}
             {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
               <BlockerAssignmentsUI
@@ -465,109 +522,235 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               />
             )}
 
-            <PlayerArea
-              state={playerState}
+            {/* Player Area */}
+            <div className="mt-auto">
+              <PlayerArea
+                state={playerState}
+                isPlayerTurn={isPlayerTurn}
+                selectedCard={selectedCard}
+                onSelectCard={setSelectedCard}
+                onPlayCard={handlePlayCard}
+                selectedAttackers={selectedAttackers}
+                onToggleAttacker={handleToggleAttacker}
+                combatActive={gameState.combat.active}
+                combatPhase={gameState.combat.phase}
+                selectedBlocker={selectedBlocker}
+                onBlockerSelect={handleBlockerSelect}
+                onRaiseMinion={handleRaiseMinion}
+                onSacrificeMinion={handleSacrificeMinion}
+              />
+            </div>
+          </div>
+
+          {/* Opponent Hero Panel - Right Side */}
+          <div className="w-72 border-l-2 border-zinc-700 bg-zinc-900/50 p-3 overflow-y-auto">
+            <HeroPanel
+              state={aiState}
+              isPlayer={false}
               isPlayerTurn={isPlayerTurn}
-              selectedCard={selectedCard}
-              onSelectCard={setSelectedCard}
-              onPlayCard={handlePlayCard}
-              onHeroPower={handleHeroPower}
-              onHeroAttack={handleHeroAttack}
-              selectedAttackers={selectedAttackers}
-              onToggleAttacker={handleToggleAttacker}
-              combatActive={gameState.combat.active}
-              combatPhase={gameState.combat.phase}
-              selectedBlocker={selectedBlocker}
-              onBlockerSelect={handleBlockerSelect}
-              onRaiseMinion={handleRaiseMinion}
-              onSacrificeMinion={handleSacrificeMinion}
             />
           </div>
         </div>
 
-        {/* Turn Control */}
+        {/* Bottom Control Bar */}
         <div className="border-t-2 border-zinc-700 bg-zinc-950 p-4">
-          <div className="max-w-7xl mx-auto flex justify-between items-center">
-            <div className="flex gap-4 items-center">
-              <div className="text-amber-500 font-bold">
-                ROUND {gameState.roundNumber} | TURN {gameState.turnNumber}
-              </div>
-              <div className={`font-bold ${isPlayerTurn ? 'text-green-400' : 'text-red-400'}`}>
-                {isPlayerTurn ? '● YOUR TURN' : '○ AI TURN'}
-              </div>
-              <div className="text-zinc-400">
-                Phase: <span className="text-white uppercase">{gameState.phase}</span>
-              </div>
-              {gameState.combat.active && (
-                <div className="text-red-500 font-bold animate-pulse">
-                  ⚔️ {
-                    gameState.combat.phase === 'blocking' ? 'BLOCKING PHASE' :
-                    gameState.combat.phase === 'damage_order' ? 'ASSIGN DAMAGE ORDER' :
-                    gameState.combat.phase === 'resolving' ? 'RESOLVING COMBAT' :
-                    'COMBAT ACTIVE'
-                  }
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2">
-              {/* Blocking phase - defender assigns blockers */}
-              {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
-                <>
-                  <button
-                    onClick={handleSkipBlocking}
-                    className="px-6 py-3 font-bold rounded-lg bg-gray-600 text-white hover:bg-gray-500 hover:scale-105 transition-all"
-                  >
-                    NO BLOCKS
-                  </button>
-                  <button
-                    onClick={handleConfirmBlockers}
-                    className="px-6 py-3 font-bold rounded-lg bg-green-600 text-white hover:bg-green-500 hover:scale-105 transition-all"
-                  >
-                    DONE BLOCKING
-                  </button>
-                </>
-              )}
-
-              {/* Damage order phase - attacker assigns order */}
-              {gameState.combat.active && gameState.combat.phase === 'damage_order' && isPlayerTurn && (
+          <div className="flex justify-center gap-2">
+            {/* Blocking phase - defender assigns blockers */}
+            {gameState.combat.active && gameState.combat.phase === 'blocking' && !isPlayerTurn && (
+              <>
                 <button
-                  onClick={handleConfirmDamageOrders}
-                  className="px-6 py-3 font-bold rounded-lg bg-red-600 text-white hover:bg-red-500 hover:scale-105 transition-all animate-pulse"
+                  onClick={handleSkipBlocking}
+                  className="px-6 py-3 font-bold rounded-lg bg-gray-600 text-white hover:bg-gray-500 hover:scale-105 transition-all"
                 >
-                  CONFIRM DAMAGE ORDER
+                  NO BLOCKS
                 </button>
-              )}
-
-              {!gameState.combat.active && isPlayerTurn && selectedAttackers.length > 0 && (
                 <button
-                  onClick={handleDeclareAttack}
-                  className="px-6 py-3 font-bold rounded-lg bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 transition-all"
+                  onClick={handleConfirmBlockers}
+                  className="px-6 py-3 font-bold rounded-lg bg-green-600 text-white hover:bg-green-500 hover:scale-105 transition-all"
                 >
-                  ATTACK ({selectedAttackers.length})
+                  DONE BLOCKING
                 </button>
-              )}
+              </>
+            )}
 
+            {/* Damage order phase - attacker assigns order */}
+            {gameState.combat.active && gameState.combat.phase === 'damage_order' && isPlayerTurn && (
               <button
-                onClick={handleEndTurn}
-                disabled={!isPlayerTurn || gameState.combat.active}
-                className={`px-8 py-3 font-bold rounded-lg transition-all
-                  ${isPlayerTurn && !gameState.combat.active
-                    ? 'bg-amber-500 text-black hover:bg-amber-400 hover:scale-105'
-                    : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
-                  }`}
+                onClick={handleConfirmDamageOrders}
+                className="px-6 py-3 font-bold rounded-lg bg-red-600 text-white hover:bg-red-500 hover:scale-105 transition-all animate-pulse"
               >
-                END TURN
+                CONFIRM DAMAGE ORDER
               </button>
-            </div>
+            )}
+
+            {!gameState.combat.active && isPlayerTurn && selectedAttackers.length > 0 && (
+              <button
+                onClick={handleDeclareAttack}
+                className="px-6 py-3 font-bold rounded-lg bg-orange-600 text-white hover:bg-orange-500 hover:scale-105 transition-all"
+              >
+                ATTACK ({selectedAttackers.length})
+              </button>
+            )}
+
+            <button
+              onClick={handleEndTurn}
+              disabled={!isPlayerTurn || gameState.combat.active}
+              className={`px-8 py-3 font-bold rounded-lg transition-all
+                ${isPlayerTurn && !gameState.combat.active
+                  ? 'bg-amber-500 text-black hover:bg-amber-400 hover:scale-105'
+                  : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+                }`}
+            >
+              END TURN
+            </button>
           </div>
         </div>
       </div>
 
       {/* Right Sidebar - Action Log */}
-      <div className="w-80 border-l-2 border-zinc-700 bg-zinc-950 flex flex-col">
-        <ActionLog log={gameState.actionLog} />
+      <div className={`border-l-2 border-zinc-700 bg-zinc-950 flex flex-col transition-all duration-300 ${logExpanded ? 'w-80' : 'w-12'}`}>
+        <div className="p-2 border-b border-zinc-700 flex items-center justify-between">
+          <button
+            onClick={() => setLogExpanded(!logExpanded)}
+            className="p-2 hover:bg-zinc-800 rounded transition-all"
+            title={logExpanded ? 'Collapse Log' : 'Expand Log'}
+          >
+            <span className="text-blue-400 text-xl">{logExpanded ? '▶' : '◀'}</span>
+          </button>
+        </div>
+        {logExpanded && (
+          <div className="flex-1 overflow-y-auto">
+            <ActionLog log={gameState.actionLog} />
+          </div>
+        )}
+        {!logExpanded && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="transform rotate-90 whitespace-nowrap text-blue-400 font-bold text-sm">
+              LOG
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+// Hero Panel Component (for both player and opponent)
+function HeroPanel({ state, isPlayer, isPlayerTurn, onHeroPower, onHeroAttack }) {
+  return (
+    <div className="space-y-3">
+      {/* Hero Name */}
+      <div className={`border-2 rounded-lg p-3 ${isPlayer ? 'bg-green-900/20 border-green-700' : 'bg-red-900/20 border-red-800'}`}>
+        <div className={`font-bold text-xl ${isPlayer ? 'text-green-400' : 'text-red-400'}`}>
+          {state.hero.name} {isPlayer ? '(YOU)' : '(AI)'}
+        </div>
+        {isPlayer && (
+          <div className="text-sm text-zinc-400 mt-1">
+            {state.hero.leveled ? (
+              <span className="text-amber-400">⭐ LEVELED UP</span>
+            ) : (
+              <span>Level: {state.hero.levelProgress} | {state.hero.levelCondition}</span>
+            )}
+          </div>
+        )}
+        {!isPlayer && (
+          <div className="text-sm text-zinc-400 mt-1">
+            Cards: {state.zones.hand.length} | Deck: {state.zones.deck.length}
+          </div>
+        )}
+      </div>
+
+      {/* Stats */}
+      <div className="space-y-2">
+        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
+          <div className="text-xs text-zinc-400">Health</div>
+          <div className="text-2xl font-bold text-red-400">
+            {state.hero.currentHealth}/{state.hero.maxHealth}
+          </div>
+          {state.hero.currentArmor > 0 && (
+            <div className="text-sm text-blue-400">+{state.hero.currentArmor} armor</div>
+          )}
+        </div>
+
+        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
+          <div className="text-xs text-zinc-400">Mana</div>
+          <div className="text-2xl font-bold text-blue-400">
+            {state.hero.currentMana}/{state.hero.maxMana}
+          </div>
+        </div>
+
+        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
+          <div className="text-xs text-zinc-400">Gold</div>
+          <div className="text-2xl font-bold text-amber-400">{state.hero.gold}</div>
+        </div>
+
+        {state.hero.classResource?.type !== 'none' && (
+          <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
+            <div className="text-xs text-zinc-400">{state.hero.classResource.type}</div>
+            <div className="text-2xl font-bold text-purple-400">
+              {typeof state.hero.classResource.value === 'boolean'
+                ? state.hero.classResource.value ? 'YES' : 'NO'
+                : state.hero.classResource.value}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Equipment Display (Player only) */}
+      {isPlayer && (
+        <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
+          <div className="text-xs text-zinc-400 mb-2 font-bold">EQUIPMENT</div>
+          <div className="space-y-1">
+            {Object.entries(state.hero.equipment).map(([slot, item]) => (
+              <div key={slot} className="text-xs">
+                {item ? (
+                  <div className="bg-amber-900/30 border border-amber-600 rounded px-2 py-1" title={item.effect}>
+                    <div className="text-amber-400 font-bold">{slot.toUpperCase()}</div>
+                    <div className="text-zinc-300 truncate">{item.name}</div>
+                  </div>
+                ) : (
+                  <div className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 opacity-50">
+                    <div className="text-zinc-500 font-bold">{slot.toUpperCase()}</div>
+                    <div className="text-zinc-600">Empty</div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Hero Abilities (Player only) */}
+      {isPlayer && onHeroPower && onHeroAttack && (
+        <div className="space-y-2">
+          <button
+            onClick={onHeroPower}
+            disabled={state.hero.abilitiesUsedThisTurn.heroPower || !isPlayerTurn}
+            className={`w-full px-3 py-2 rounded-lg border-2 text-sm font-bold transition
+              ${state.hero.abilitiesUsedThisTurn.heroPower || !isPlayerTurn
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed'
+                : 'bg-purple-900/30 border-purple-600 text-purple-300 hover:bg-purple-800/50 cursor-pointer'
+              }`}
+          >
+            {state.hero.abilities.heroPower.name}
+            <div className="text-xs opacity-75">({state.hero.abilities.heroPower.cost} mana)</div>
+            <div className="text-xs opacity-75">{state.hero.abilities.heroPower.description}</div>
+          </button>
+
+          <button
+            onClick={onHeroAttack}
+            disabled={state.hero.abilitiesUsedThisTurn.attack || !isPlayerTurn}
+            className={`w-full px-3 py-2 rounded-lg border-2 text-sm font-bold transition
+              ${state.hero.abilitiesUsedThisTurn.attack || !isPlayerTurn
+                ? 'bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed'
+                : 'bg-red-900/30 border-red-600 text-red-300 hover:bg-red-800/50 cursor-pointer'
+              }`}
+          >
+            {state.hero.abilities.attack.name}
+            <div className="text-xs opacity-75">{state.hero.abilities.attack.description}</div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -578,33 +761,6 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 
   return (
     <div className="space-y-3">
-      {/* AI Hero Info */}
-      <div className="flex items-center justify-between bg-red-900/20 border-2 border-red-800 rounded-lg p-3">
-        <div>
-          <div className="text-red-400 font-bold text-lg">{state.hero.name} (AI)</div>
-          <div className="text-sm text-zinc-400">
-            Cards in hand: {state.zones.hand.length} | Deck: {state.zones.deck.length}
-          </div>
-        </div>
-        <div className="flex gap-4 text-right">
-          <div>
-            <div className="text-xs text-zinc-400">Health</div>
-            <div className="text-xl font-bold text-red-400">
-              {state.hero.currentHealth}/{state.hero.maxHealth}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-zinc-400">Mana</div>
-            <div className="text-xl font-bold text-blue-400">
-              {state.hero.currentMana}/{state.hero.maxMana}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-zinc-400">Gold</div>
-            <div className="text-xl font-bold text-amber-400">{state.hero.gold}</div>
-          </div>
-        </div>
-      </div>
 
       {/* Attackers Display (during blocking phase) */}
       {inBlockingPhase && combat.attackers.length > 0 && (
@@ -657,7 +813,7 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, onHeroPower, onHeroAttack, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion }) {
   const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
   const isNecromancer = state.hero.name.toLowerCase() === 'necromancer';
 
@@ -775,117 +931,18 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
           )}
         </div>
       </div>
-
-      {/* Player Hero Info */}
-      <div className="bg-green-900/20 border-2 border-green-700 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="text-green-400 font-bold text-xl">{state.hero.name} (YOU)</div>
-            <div className="text-sm text-zinc-400 mt-1">
-              {state.hero.leveled ? (
-                <span className="text-amber-400">⭐ LEVELED UP</span>
-              ) : (
-                <span>Level Progress: {state.hero.levelProgress} | {state.hero.levelCondition}</span>
-              )}
-            </div>
-
-            {/* Equipment Display */}
-            <div className="flex gap-2 mt-2">
-              {Object.entries(state.hero.equipment).map(([slot, item]) => (
-                <div key={slot} className="text-[10px]">
-                  {item ? (
-                    <div className="bg-amber-900/30 border border-amber-600 rounded px-2 py-1" title={item.effect}>
-                      <div className="text-amber-400 font-bold">{slot.toUpperCase()}</div>
-                      <div className="text-zinc-300">{item.name}</div>
-                    </div>
-                  ) : (
-                    <div className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 opacity-50">
-                      <div className="text-zinc-500 font-bold">{slot.toUpperCase()}</div>
-                      <div className="text-zinc-600">Empty</div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex gap-6">
-            <div className="text-center">
-              <div className="text-xs text-zinc-400">Health</div>
-              <div className="text-2xl font-bold text-red-400">
-                {state.hero.currentHealth}/{state.hero.maxHealth}
-              </div>
-              {state.hero.currentArmor > 0 && (
-                <div className="text-sm text-blue-400">+{state.hero.currentArmor} armor</div>
-              )}
-            </div>
-
-            <div className="text-center">
-              <div className="text-xs text-zinc-400">Mana</div>
-              <div className="text-2xl font-bold text-blue-400">
-                {state.hero.currentMana}/{state.hero.maxMana}
-              </div>
-            </div>
-
-            <div className="text-center">
-              <div className="text-xs text-zinc-400">Gold</div>
-              <div className="text-2xl font-bold text-amber-400">{state.hero.gold}</div>
-            </div>
-
-            {state.hero.classResource?.type !== 'none' && (
-              <div className="text-center">
-                <div className="text-xs text-zinc-400">{state.hero.classResource.type}</div>
-                <div className="text-2xl font-bold text-purple-400">
-                  {typeof state.hero.classResource.value === 'boolean'
-                    ? state.hero.classResource.value ? 'YES' : 'NO'
-                    : state.hero.classResource.value}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Hero Abilities */}
-        <div className="mt-3 flex gap-2">
-          <button
-            onClick={onHeroPower}
-            disabled={state.hero.abilitiesUsedThisTurn.heroPower || !isPlayerTurn}
-            className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-bold transition
-              ${state.hero.abilitiesUsedThisTurn.heroPower || !isPlayerTurn
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed'
-                : 'bg-purple-900/30 border-purple-600 text-purple-300 hover:bg-purple-800/50 cursor-pointer'
-              }`}
-          >
-            {state.hero.abilities.heroPower.name} ({state.hero.abilities.heroPower.cost} mana)
-            <div className="text-xs opacity-75">{state.hero.abilities.heroPower.description}</div>
-          </button>
-
-          <button
-            onClick={onHeroAttack}
-            disabled={state.hero.abilitiesUsedThisTurn.attack || !isPlayerTurn}
-            className={`flex-1 px-3 py-2 rounded-lg border-2 text-sm font-bold transition
-              ${state.hero.abilitiesUsedThisTurn.attack || !isPlayerTurn
-                ? 'bg-zinc-800 border-zinc-700 text-zinc-600 cursor-not-allowed'
-                : 'bg-red-900/30 border-red-600 text-red-300 hover:bg-red-800/50 cursor-pointer'
-              }`}
-          >
-            {state.hero.abilities.attack.name}
-            <div className="text-xs opacity-75">{state.hero.abilities.attack.description}</div>
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
 
 // Shop Area Component
-function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase }) {
+function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase, compact = true }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="space-y-3">
       <div className="text-amber-500 font-bold text-sm">
-        SHOP (Tier: {shop.currentTier.toUpperCase()})
+        Tier: {shop.currentTier.toUpperCase()}
       </div>
-      <div className="flex gap-2 flex-1">
+      <div className="space-y-2">
         {shop.market.map((item) => (
           <ShopCard
             key={item.instanceId}
@@ -893,6 +950,7 @@ function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase }) {
             canAfford={playerGold >= item.cost}
             isPlayerTurn={isPlayerTurn}
             onClick={() => onPurchase(item.instanceId)}
+            compact={compact}
           />
         ))}
       </div>
@@ -993,41 +1051,42 @@ function HandCard({ card, isSelected, onSelect, onPlay, canPlay }) {
 }
 
 // Shop Card Component
-function ShopCard({ item, canAfford, isPlayerTurn, onClick }) {
+function ShopCard({ item, canAfford, isPlayerTurn, onClick, compact = true }) {
   const canPurchase = isPlayerTurn && canAfford;
 
   return (
     <div
       onClick={canPurchase ? onClick : undefined}
-      className={`relative w-24 h-24 rounded-lg border-2 p-2 text-xs transition
+      className={`relative w-full rounded-lg border-2 p-3 text-xs transition
         ${canPurchase
           ? 'border-amber-600 bg-amber-900/20 hover:bg-amber-800/30 hover:scale-105 cursor-pointer'
           : 'border-zinc-700 bg-zinc-900/30 opacity-50 cursor-not-allowed'
         }`}
     >
-      <div className={`font-bold truncate ${canPurchase ? 'text-amber-300' : 'text-zinc-500'}`}>
-        {item.name}
+      <div className="flex items-start justify-between mb-2">
+        <div className={`font-bold ${canPurchase ? 'text-amber-300' : 'text-zinc-500'}`}>
+          {item.name}
+        </div>
+        {/* Tier Badge */}
+        <div className="bg-zinc-700 text-amber-400 rounded-full w-6 h-6 flex items-center justify-center font-bold text-[10px]">
+          T{item.tier}
+        </div>
       </div>
-      <div className="text-[10px] text-zinc-400 truncate mt-1">{item.slot}</div>
-      <div className="text-[9px] text-zinc-500 line-clamp-2 mt-1">{item.effect}</div>
+
+      <div className="text-[10px] text-zinc-400 mb-1">{item.slot}</div>
+      <div className="text-[10px] text-zinc-300 mb-2">{item.effect}</div>
 
       {/* Cost */}
-      <div className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 font-bold text-xs
-        ${canAfford ? 'bg-amber-600 text-black' : 'bg-red-600 text-white'}
-      `}>
-        {item.cost}g
-      </div>
-
-      {/* Tier Badge */}
-      <div className="absolute -top-1 -left-1 bg-zinc-700 text-amber-400 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px]">
-        T{item.tier}
-      </div>
-
-      {!canAfford && (
-        <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
-          <div className="text-red-400 font-bold text-[9px]">NO GOLD</div>
+      <div className="flex items-center justify-between">
+        <div className={`rounded px-2 py-1 font-bold text-xs
+          ${canAfford ? 'bg-amber-600 text-black' : 'bg-red-600 text-white'}
+        `}>
+          {item.cost} GOLD
         </div>
-      )}
+        {!canAfford && (
+          <div className="text-red-400 font-bold text-[9px]">NOT ENOUGH GOLD</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1179,20 +1238,16 @@ function DamageOrderUI({ combat, damageOrders, onSetOrder }) {
 // Action Log Component
 function ActionLog({ log }) {
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-zinc-700">
-        <h3 className="text-amber-500 font-bold">ACTION LOG</h3>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        {log.slice().reverse().map((entry, idx) => (
-          <div key={idx} className="text-sm border-l-2 border-zinc-700 pl-3 py-1">
-            <div className="text-zinc-400 text-xs">
-              {new Date(entry.timestamp).toLocaleTimeString()}
-            </div>
-            <div className="text-white">{entry.message}</div>
+    <div className="p-4 space-y-2">
+      <h3 className="text-blue-400 font-bold mb-3">ACTION LOG</h3>
+      {log.slice().reverse().map((entry, idx) => (
+        <div key={idx} className="text-sm border-l-2 border-zinc-700 pl-3 py-1">
+          <div className="text-zinc-400 text-xs">
+            {new Date(entry.timestamp).toLocaleTimeString()}
           </div>
-        ))}
-      </div>
+          <div className="text-white">{entry.message}</div>
+        </div>
+      ))}
     </div>
   );
 }
