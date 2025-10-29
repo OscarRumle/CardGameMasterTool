@@ -2,6 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Game UI - Disable text selection like a real video game */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+/* Allow text selection only in input fields */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+/* Buttons should have pointer cursor */
+button,
+a,
+select,
+[role="button"] {
+  cursor: pointer;
+}
+
+/* Prevent image dragging (game-like behavior) */
+img {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
+}
+
+/* Cards in game should be draggable visually but not as images */
+.card-component {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
 @media print {
   body {
     margin: 0;
