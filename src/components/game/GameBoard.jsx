@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
@@ -134,6 +134,36 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
   };
 
+  const handlePurchaseEquipment = (equipmentId) => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = purchaseEquipment(gameState, 'player', equipmentId);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
+  const handleRerollShop = () => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = rerollShop(gameState, 'player');
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
   return (
     <div className="w-full h-screen flex bg-gradient-to-b from-zinc-900 to-black overflow-hidden">
       {/* Error Message */}
@@ -155,7 +185,14 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         {/* Middle Section - Shop */}
         <div className="border-b-2 border-amber-600/30 bg-gradient-to-r from-amber-900/10 to-orange-900/10 p-3">
           <div className="max-w-7xl mx-auto">
-            <ShopArea shop={gameState.shop} roundNumber={gameState.roundNumber} />
+            <ShopArea
+              shop={gameState.shop}
+              roundNumber={gameState.roundNumber}
+              playerGold={playerState.hero.gold}
+              isPlayerTurn={isPlayerTurn}
+              onPurchase={handlePurchaseEquipment}
+              onReroll={handleRerollShop}
+            />
           </div>
         </div>
 
@@ -358,7 +395,7 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
       {/* Player Hero Info */}
       <div className="bg-green-900/20 border-2 border-green-700 rounded-lg p-4">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="flex-1">
             <div className="text-green-400 font-bold text-xl">{state.hero.name} (YOU)</div>
             <div className="text-sm text-zinc-400 mt-1">
               {state.hero.leveled ? (
@@ -366,6 +403,25 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
               ) : (
                 <span>Level Progress: {state.hero.levelProgress} | {state.hero.levelCondition}</span>
               )}
+            </div>
+
+            {/* Equipment Display */}
+            <div className="flex gap-2 mt-2">
+              {Object.entries(state.hero.equipment).map(([slot, item]) => (
+                <div key={slot} className="text-[10px]">
+                  {item ? (
+                    <div className="bg-amber-900/30 border border-amber-600 rounded px-2 py-1" title={item.effect}>
+                      <div className="text-amber-400 font-bold">{slot.toUpperCase()}</div>
+                      <div className="text-zinc-300">{item.name}</div>
+                    </div>
+                  ) : (
+                    <div className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 opacity-50">
+                      <div className="text-zinc-500 font-bold">{slot.toUpperCase()}</div>
+                      <div className="text-zinc-600">Empty</div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -439,7 +495,7 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
 }
 
 // Shop Area Component
-function ShopArea({ shop, roundNumber }) {
+function ShopArea({ shop, roundNumber, playerGold, isPlayerTurn, onPurchase, onReroll }) {
   return (
     <div className="flex items-center gap-3">
       <div className="text-amber-500 font-bold text-sm">
@@ -447,11 +503,28 @@ function ShopArea({ shop, roundNumber }) {
       </div>
       <div className="flex gap-2 flex-1">
         {shop.market.map((item) => (
-          <ShopCard key={item.instanceId} item={item} />
+          <ShopCard
+            key={item.instanceId}
+            item={item}
+            canAfford={playerGold >= item.cost}
+            isPlayerTurn={isPlayerTurn}
+            onClick={() => onPurchase(item.instanceId)}
+          />
         ))}
       </div>
+      <button
+        onClick={onReroll}
+        disabled={!isPlayerTurn || playerGold < 1}
+        className={`px-3 py-1 text-xs font-bold rounded transition
+          ${isPlayerTurn && playerGold >= 1
+            ? 'bg-amber-600 text-white hover:bg-amber-500'
+            : 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
+          }`}
+      >
+        REROLL (1g)
+      </button>
       <div className="text-xs text-zinc-500">
-        Next refresh: Round {roundNumber < 5 ? 5 : 9}
+        Next refresh: Round {roundNumber < 5 ? 5 : roundNumber < 9 ? 9 : '-'}
       </div>
     </div>
   );
@@ -547,15 +620,28 @@ function HandCard({ card, isSelected, onSelect, onPlay, canPlay }) {
 }
 
 // Shop Card Component
-function ShopCard({ item }) {
+function ShopCard({ item, canAfford, isPlayerTurn, onClick }) {
+  const canPurchase = isPlayerTurn && canAfford;
+
   return (
-    <div className="relative w-24 h-24 rounded-lg border-2 border-amber-600 bg-amber-900/20 p-2 text-xs hover:bg-amber-800/30 transition cursor-pointer">
-      <div className="font-bold text-amber-300 truncate">{item.name}</div>
+    <div
+      onClick={canPurchase ? onClick : undefined}
+      className={`relative w-24 h-24 rounded-lg border-2 p-2 text-xs transition
+        ${canPurchase
+          ? 'border-amber-600 bg-amber-900/20 hover:bg-amber-800/30 hover:scale-105 cursor-pointer'
+          : 'border-zinc-700 bg-zinc-900/30 opacity-50 cursor-not-allowed'
+        }`}
+    >
+      <div className={`font-bold truncate ${canPurchase ? 'text-amber-300' : 'text-zinc-500'}`}>
+        {item.name}
+      </div>
       <div className="text-[10px] text-zinc-400 truncate mt-1">{item.slot}</div>
       <div className="text-[9px] text-zinc-500 line-clamp-2 mt-1">{item.effect}</div>
 
       {/* Cost */}
-      <div className="absolute bottom-1 right-1 bg-amber-600 text-black rounded px-1.5 py-0.5 font-bold text-xs">
+      <div className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 font-bold text-xs
+        ${canAfford ? 'bg-amber-600 text-black' : 'bg-red-600 text-white'}
+      `}>
         {item.cost}g
       </div>
 
@@ -563,6 +649,12 @@ function ShopCard({ item }) {
       <div className="absolute -top-1 -left-1 bg-zinc-700 text-amber-400 rounded-full w-5 h-5 flex items-center justify-center font-bold text-[10px]">
         T{item.tier}
       </div>
+
+      {!canAfford && (
+        <div className="absolute inset-0 bg-black/30 rounded-lg flex items-center justify-center">
+          <div className="text-red-400 font-bold text-[9px]">NO GOLD</div>
+        </div>
+      )}
     </div>
   );
 }

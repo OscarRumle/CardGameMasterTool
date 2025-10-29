@@ -455,6 +455,11 @@ export function endTurn(state) {
   // Increment turn/round
   if (nextPlayerId === 'player') {
     newState.roundNumber += 1;
+
+    // Check for shop refresh at rounds 5 and 9
+    if (newState.roundNumber === 5 || newState.roundNumber === 9) {
+      newState = refreshShop(newState);
+    }
   }
   newState.turnNumber += 1;
 
@@ -1155,4 +1160,214 @@ function processDeaths(state, playerId) {
   }
 
   return newState;
+}
+
+/**
+ * Purchase equipment from shop
+ */
+export function purchaseEquipment(state, playerId, equipmentInstanceId) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (playerState.hero.abilitiesUsedThisTurn.shopPurchase) {
+    return { error: 'Already purchased this turn', state };
+  }
+
+  // Find equipment in shop
+  const equipment = state.shop.market.find(item => item.instanceId === equipmentInstanceId);
+  if (!equipment) {
+    return { error: 'Equipment not found in shop', state };
+  }
+
+  // Check gold
+  if (playerState.hero.gold < equipment.cost) {
+    return { error: 'Not enough gold', state };
+  }
+
+  // Check slot
+  const slot = equipment.slot.toLowerCase();
+  const validSlots = ['weapon', 'chest', 'jewelry', 'relic'];
+  if (!validSlots.includes(slot)) {
+    return { error: `Invalid equipment slot: ${slot}`, state };
+  }
+
+  // Remove from shop
+  const newMarket = state.shop.market.filter(item => item.instanceId !== equipmentInstanceId);
+
+  // Replace with new item from deck
+  const currentTier = state.shop.currentTier;
+  let deckKey = currentTier === 'early' ? 'earlyDeck' : currentTier === 'mid' ? 'midDeck' : 'lateDeck';
+  const deck = [...state.shop[deckKey]];
+
+  if (deck.length > 0) {
+    newMarket.push(createEquipmentInstance(deck.shift()));
+  }
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      hero: {
+        ...playerState.hero,
+        gold: playerState.hero.gold - equipment.cost,
+        equipment: {
+          ...playerState.hero.equipment,
+          [slot]: equipment
+        },
+        abilitiesUsedThisTurn: {
+          ...playerState.hero.abilitiesUsedThisTurn,
+          shopPurchase: true
+        }
+      }
+    },
+    shop: {
+      ...state.shop,
+      market: newMarket,
+      [deckKey]: deck
+    }
+  };
+
+  // Apply equipment effects
+  newState = applyEquipmentEffects(newState, playerId, equipment, slot);
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} purchased ${equipment.name} for ${equipment.cost} gold`);
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Apply equipment effects to hero
+ */
+function applyEquipmentEffects(state, playerId, equipment, slot) {
+  let newState = { ...state };
+  const effect = (equipment.effect || '').toLowerCase();
+
+  // Parse and apply stat bonuses
+  // Format examples: "+2 max health", "+1 armor", "+3 attack"
+
+  // Max Health
+  const healthMatch = effect.match(/\+(\d+) (?:max )?health/);
+  if (healthMatch) {
+    const bonus = parseInt(healthMatch[1]);
+    newState[playerId].hero.maxHealth += bonus;
+    newState[playerId].hero.currentHealth += bonus;
+    newState = logAction(newState, `Gained +${bonus} max health`);
+  }
+
+  // Armor
+  const armorMatch = effect.match(/\+(\d+) armor/);
+  if (armorMatch) {
+    const bonus = parseInt(armorMatch[1]);
+    newState[playerId].hero.currentArmor += bonus;
+    newState = logAction(newState, `Gained +${bonus} armor`);
+  }
+
+  // Mana
+  const manaMatch = effect.match(/\+(\d+) (?:max )?mana/);
+  if (manaMatch) {
+    const bonus = parseInt(manaMatch[1]);
+    newState[playerId].hero.maxMana = Math.min(newState[playerId].hero.maxMana + bonus, GAME_CONSTANTS.MAX_MANA);
+    newState = logAction(newState, `Gained +${bonus} max mana`);
+  }
+
+  return newState;
+}
+
+/**
+ * Refresh shop to next tier
+ */
+export function refreshShop(state) {
+  const currentTier = state.shop.currentTier;
+
+  let newTier = currentTier;
+  let deckKey = 'earlyDeck';
+
+  if (state.roundNumber >= 9) {
+    newTier = 'late';
+    deckKey = 'lateDeck';
+  } else if (state.roundNumber >= 5) {
+    newTier = 'mid';
+    deckKey = 'midDeck';
+  } else {
+    newTier = 'early';
+    deckKey = 'earlyDeck';
+  }
+
+  // If tier changed, draw new market
+  if (newTier !== currentTier) {
+    const deck = [...state.shop[deckKey]];
+    const newMarket = [];
+
+    for (let i = 0; i < GAME_CONSTANTS.SHOP_SIZE && deck.length > 0; i++) {
+      newMarket.push(deck.shift());
+    }
+
+    let newState = {
+      ...state,
+      shop: {
+        ...state.shop,
+        currentTier: newTier,
+        market: newMarket,
+        [deckKey]: deck
+      }
+    };
+
+    newState = logAction(newState, `Shop refreshed to ${newTier} tier!`);
+    return newState;
+  }
+
+  return state;
+}
+
+/**
+ * Reroll shop (replace all items with new ones from current tier)
+ */
+export function rerollShop(state, playerId) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  // Cost 1 gold to reroll
+  if (playerState.hero.gold < 1) {
+    return { error: 'Not enough gold to reroll (costs 1 gold)', state };
+  }
+
+  const currentTier = state.shop.currentTier;
+  const deckKey = currentTier === 'early' ? 'earlyDeck' : currentTier === 'mid' ? 'midDeck' : 'lateDeck';
+
+  // Return current market to deck and shuffle
+  const returnedItems = [...state.shop.market];
+  const deck = shuffleDeck([...state.shop[deckKey], ...returnedItems]);
+
+  // Draw new market
+  const newMarket = [];
+  for (let i = 0; i < GAME_CONSTANTS.SHOP_SIZE && deck.length > 0; i++) {
+    newMarket.push(deck.shift());
+  }
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      hero: {
+        ...playerState.hero,
+        gold: playerState.hero.gold - 1
+      }
+    },
+    shop: {
+      ...state.shop,
+      market: newMarket,
+      [deckKey]: deck
+    }
+  };
+
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} rerolled the shop for 1 gold`);
+
+  return { state: newState, error: null };
 }

@@ -1,5 +1,5 @@
 // Simple AI - Makes basic legal moves
-import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, GAME_CONSTANTS } from './gameEngine';
+import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, declareAttackers, resolveCombat, purchaseEquipment, GAME_CONSTANTS } from './gameEngine';
 
 /**
  * AI takes its turn
@@ -75,6 +75,22 @@ export function aiTakeTurn(initialState) {
   }
 
   console.log(`AI performed ${actionsPerformed} actions`);
+
+  // Try to purchase equipment if we have gold and haven't purchased yet
+  if (!state.ai.hero.abilitiesUsedThisTurn.shopPurchase && state.ai.hero.gold > 0) {
+    const affordableItems = state.shop.market.filter(item => item.cost <= state.ai.hero.gold);
+    if (affordableItems.length > 0) {
+      // Buy the most expensive affordable item
+      affordableItems.sort((a, b) => b.cost - a.cost);
+      const itemToBuy = affordableItems[0];
+
+      const purchaseResult = purchaseEquipment(state, 'ai', itemToBuy.instanceId);
+      if (!purchaseResult.error) {
+        state = purchaseResult.state;
+        console.log(`AI purchased: ${itemToBuy.name}`);
+      }
+    }
+  }
 
   // Try to attack with all available minions
   if (!state.combat.active) {
