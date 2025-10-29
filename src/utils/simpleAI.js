@@ -12,6 +12,18 @@ export function aiTakeTurn(initialState) {
 
   console.log('AI turn starting...');
 
+  // Validate it's actually AI's turn
+  if (state.currentPlayer !== 'ai') {
+    console.error('AI attempted to take turn when not current player');
+    return state;
+  }
+
+  // Validate game is not over
+  if (state.gameOver) {
+    console.error('AI attempted to take turn after game over');
+    return state;
+  }
+
   // Keep taking actions until we can't do anything useful
   while (actionsPerformed < maxActions) {
     let actionTaken = false;
@@ -78,33 +90,51 @@ export function aiTakeTurn(initialState) {
 
   // Try to purchase equipment if we have gold and haven't purchased yet
   if (!state.ai.hero.abilitiesUsedThisTurn.shopPurchase && state.ai.hero.gold > 0) {
-    const affordableItems = state.shop.market.filter(item => item.cost <= state.ai.hero.gold);
-    if (affordableItems.length > 0) {
-      // Buy the most expensive affordable item
-      affordableItems.sort((a, b) => b.cost - a.cost);
-      const itemToBuy = affordableItems[0];
+    // Validate shop exists and has items
+    if (state.shop && state.shop.market && Array.isArray(state.shop.market)) {
+      const affordableItems = state.shop.market.filter(item => {
+        const cost = parseInt(item.cost);
+        return !isNaN(cost) && cost > 0 && cost <= state.ai.hero.gold;
+      });
 
-      const purchaseResult = purchaseEquipment(state, 'ai', itemToBuy.instanceId);
-      if (!purchaseResult.error) {
-        state = purchaseResult.state;
-        console.log(`AI purchased: ${itemToBuy.name}`);
+      if (affordableItems.length > 0) {
+        // Buy the most expensive affordable item
+        affordableItems.sort((a, b) => b.cost - a.cost);
+        const itemToBuy = affordableItems[0];
+
+        const purchaseResult = purchaseEquipment(state, 'ai', itemToBuy.instanceId);
+        if (!purchaseResult.error) {
+          state = purchaseResult.state;
+          console.log(`AI purchased: ${itemToBuy.name}`);
+        } else {
+          console.log(`AI purchase failed: ${purchaseResult.error}`);
+        }
       }
     }
   }
 
   // Try to attack with all available minions
   if (!state.combat.active) {
-    const availableAttackers = state.ai.zones.battlefield.filter(minion => {
-      return !minion.tapped && !minion.summoningSickness;
-    }).map(m => m.instanceId);
+    // Validate battlefield exists
+    if (state.ai && state.ai.zones && Array.isArray(state.ai.zones.battlefield)) {
+      const availableAttackers = state.ai.zones.battlefield.filter(minion => {
+        // Validate minion has required fields
+        return minion &&
+               minion.instanceId &&
+               !minion.tapped &&
+               !minion.summoningSickness;
+      }).map(m => m.instanceId);
 
-    if (availableAttackers.length > 0) {
-      console.log(`AI declaring ${availableAttackers.length} attackers`);
-      const attackResult = declareAttackers(state, 'ai', availableAttackers);
+      if (availableAttackers.length > 0) {
+        console.log(`AI declaring ${availableAttackers.length} attackers`);
+        const attackResult = declareAttackers(state, 'ai', availableAttackers);
 
-      if (!attackResult.error) {
-        state = attackResult.state;
-        console.log('AI attacks declared');
+        if (!attackResult.error) {
+          state = attackResult.state;
+          console.log('AI attacks declared');
+        } else {
+          console.log(`AI attack failed: ${attackResult.error}`);
+        }
       }
     }
   }
@@ -113,8 +143,8 @@ export function aiTakeTurn(initialState) {
   if (state.combat.active && state.combat.phase === 'blocking' && state.currentPlayer !== 'ai') {
     console.log('AI is being attacked, making blocking decisions');
 
-    // Get available blockers (untapped minions)
-    const availableBlockers = state.ai.zones.battlefield.filter(minion => !minion.tapped);
+    // Get available blockers (untapped minions) - Create immutable copy
+    let availableBlockers = state.ai.zones.battlefield.filter(minion => !minion.tapped);
 
     // Sort attackers by attack power (block biggest threats)
     const sortedAttackers = [...state.combat.attackers].sort((a, b) => (b.attack || 0) - (a.attack || 0));
@@ -140,11 +170,8 @@ export function aiTakeTurn(initialState) {
           state = blockResult.state;
           console.log(`AI blocked ${attacker.name} with ${blocker.name}`);
 
-          // Remove blocker from available list
-          const blockerIndex = availableBlockers.findIndex(m => m.instanceId === blocker.instanceId);
-          if (blockerIndex !== -1) {
-            availableBlockers.splice(blockerIndex, 1);
-          }
+          // Remove blocker from available list (IMMUTABLE - use filter instead of splice)
+          availableBlockers = availableBlockers.filter(m => m.instanceId !== blocker.instanceId);
         }
       }
     }

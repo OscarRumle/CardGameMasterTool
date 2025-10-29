@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking, raiseMinion, sacrificeMinion } from '../../utils/gameEngine';
+import { endTurn, playCard, useHeroPower, useHeroAttack, declareAttackers, resolveCombat, purchaseEquipment, rerollShop, declareBlocker, skipBlocking, raiseMinion, sacrificeMinion, retrieveFromEchoZone, GAME_CONSTANTS } from '../../utils/gameEngine';
 import { aiTakeTurn } from '../../utils/simpleAI';
 
 function GameBoard({ gameState, onStateChange, onGameOver }) {
@@ -16,7 +16,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
   // AI takes turn automatically when it's AI's turn
   useEffect(() => {
     if (!isPlayerTurn && !gameState.gameOver) {
-      // Add a small delay so the user can see the turn change
+      // Use constant for AI turn delay
       const timer = setTimeout(() => {
         console.log('AI is thinking...');
         const newState = aiTakeTurn(gameState);
@@ -26,7 +26,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
         if (newState.gameOver) {
           onGameOver();
         }
-      }, 1500); // 1.5 second delay
+      }, GAME_CONSTANTS.AI_TURN_DELAY_MS);
 
       return () => clearTimeout(timer);
     }
@@ -34,7 +34,7 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
 
   const showError = (msg) => {
     setErrorMessage(msg);
-    setTimeout(() => setErrorMessage(''), 3000);
+    setTimeout(() => setErrorMessage(''), GAME_CONSTANTS.ERROR_MESSAGE_DURATION_MS);
   };
 
   const handlePlayCard = (card) => {
@@ -228,6 +228,21 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
 
     const result = sacrificeMinion(gameState, 'player', minionId);
+
+    if (result.error) {
+      showError(result.error);
+    } else {
+      onStateChange(result.state);
+    }
+  };
+
+  const handleRetrieveFromEchoZone = (spellId) => {
+    if (!isPlayerTurn) {
+      showError('Not your turn!');
+      return;
+    }
+
+    const result = retrieveFromEchoZone(gameState, 'player', spellId);
 
     if (result.error) {
       showError(result.error);

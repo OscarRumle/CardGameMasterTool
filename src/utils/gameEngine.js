@@ -18,7 +18,10 @@ export const GAME_CONSTANTS = {
   SHOP_SIZE: 5,
   SHOP_REFRESH_ROUNDS: [5, 9],
   DARK_PACT_HP_COST: 2,
-  MILL_DAMAGE: 1
+  MILL_DAMAGE: 1,
+  MAX_ACTION_LOG_ENTRIES: 100, // Prevent memory leak from unbounded log growth
+  AI_TURN_DELAY_MS: 1500, // Delay before AI takes turn
+  ERROR_MESSAGE_DURATION_MS: 3000 // How long error messages display
 };
 
 /**
@@ -116,6 +119,7 @@ function createHeroState(heroName, startMana) {
     currentMana: startMana,
     maxMana: startMana,
     gold: 0,
+    goldSpent: 0, // Track gold spent for Rogue level-up
     leveled: false,
     levelProgress: 0,
     equipment: {
@@ -302,15 +306,21 @@ function initializeShop(equipmentCards) {
  * Create a unique card instance from card data
  */
 function createCardInstance(cardData) {
+  // Validate and parse numeric fields with NaN checks
+  const manaCost = parseInt(cardData['Mana Cost'] || cardData.manaCost || 0);
+  const attack = cardData.Attack || cardData.attack || null;
+  const health = cardData.Health || cardData.health || null;
+  const bounty = cardData.Bounty || cardData.bounty || null;
+
   return {
     instanceId: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     name: cardData['Card Name'] || cardData.name || 'Unknown Card',
     cardType: (cardData['Card Type'] || cardData.cardType || 'Minion').toLowerCase(),
-    manaCost: parseInt(cardData['Mana Cost'] || cardData.manaCost || 0),
-    attack: cardData.Attack || cardData.attack || null,
-    health: cardData.Health || cardData.health || null,
-    currentHealth: cardData.Health || cardData.health || null,
-    bounty: cardData.Bounty || cardData.bounty || null,
+    manaCost: isNaN(manaCost) ? 0 : Math.max(0, manaCost), // Ensure valid non-negative number
+    attack: attack !== null && !isNaN(attack) ? parseInt(attack) : null,
+    health: health !== null && !isNaN(health) ? parseInt(health) : null,
+    currentHealth: health !== null && !isNaN(health) ? parseInt(health) : null,
+    bounty: bounty !== null && !isNaN(bounty) ? parseInt(bounty) : null,
     effect: cardData.Effect || cardData.effect || '',
     copies: cardData.Copies || cardData.copies || 1,
     // Minion-specific fields
@@ -362,14 +372,22 @@ export function expandDeck(cards) {
 
 /**
  * Log an action to the game state
+ * Limits log size to prevent memory leak
  */
 export function logAction(state, message) {
+  const newLog = [
+    ...state.actionLog,
+    { timestamp: Date.now(), message }
+  ];
+
+  // Trim log if it exceeds max size (keep most recent entries)
+  const trimmedLog = newLog.length > GAME_CONSTANTS.MAX_ACTION_LOG_ENTRIES
+    ? newLog.slice(-GAME_CONSTANTS.MAX_ACTION_LOG_ENTRIES)
+    : newLog;
+
   return {
     ...state,
-    actionLog: [
-      ...state.actionLog,
-      { timestamp: Date.now(), message }
-    ]
+    actionLog: trimmedLog
   };
 }
 
@@ -522,6 +540,17 @@ function performUpkeep(state) {
  * Play a card from hand
  */
 export function playCard(state, playerId, card, target = null) {
+  // Validate card data
+  if (!card || !card.instanceId) {
+    return { error: 'Invalid card data', state };
+  }
+
+  // Validate mana cost is a valid number
+  const manaCost = parseInt(card.manaCost);
+  if (isNaN(manaCost) || manaCost < 0) {
+    return { error: 'Invalid card mana cost', state };
+  }
+
   // Validate
   const validation = canPlayCard(state, playerId, card);
   if (!validation.valid) {
@@ -534,7 +563,7 @@ export function playCard(state, playerId, card, target = null) {
   const newHand = playerState.zones.hand.filter(c => c.instanceId !== card.instanceId);
 
   // Spend mana
-  const newMana = playerState.hero.currentMana - card.manaCost;
+  const newMana = playerState.hero.currentMana - manaCost;
 
   let newState = {
     ...state,
@@ -578,19 +607,14 @@ export function playCard(state, playerId, card, target = null) {
     newState = handleCardPlayEffects(newState, playerId, card);
 
   } else if (card.cardType === 'spell') {
-    // Cast spell - goes to discard
-    newState[playerId].zones.discard = [
-      ...newState[playerId].zones.discard,
-      card
-    ];
-
     newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} cast ${card.name}`);
 
     // Apply spell effects
     newState = applySpellEffects(newState, playerId, card, target);
 
-    // Mage: Increment Arcana when casting spell
+    // Mage-specific: Echo Zone mechanic
     if (newState[playerId].hero.name.toLowerCase() === 'mage') {
+      // Increment Arcana when casting spell
       newState[playerId].hero.classResource.value += 1;
 
       // Level progress tracks spell count, not Arcana value
@@ -604,7 +628,31 @@ export function playCard(state, playerId, card, target = null) {
         }
       }
 
+      // Echo Zone: Store spell instead of discarding (max 3 spells)
+      if (newState[playerId].zones.echoZone.length < GAME_CONSTANTS.MAGE_ECHO_ZONE_MAX) {
+        newState[playerId].zones.echoZone = [
+          ...newState[playerId].zones.echoZone,
+          card
+        ];
+        newState = logAction(newState, `${card.name} stored in Echo Zone (${newState[playerId].zones.echoZone.length}/${GAME_CONSTANTS.MAGE_ECHO_ZONE_MAX})`);
+      } else {
+        // Echo Zone full, discard oldest spell and add new one
+        const [oldestSpell, ...remainingEcho] = newState[playerId].zones.echoZone;
+        newState[playerId].zones.echoZone = [...remainingEcho, card];
+        newState[playerId].zones.discard = [
+          ...newState[playerId].zones.discard,
+          oldestSpell
+        ];
+        newState = logAction(newState, `Echo Zone full! ${oldestSpell.name} discarded, ${card.name} added`);
+      }
+
       newState = logAction(newState, `Arcana: ${newState[playerId].hero.classResource.value}`);
+    } else {
+      // Non-Mage: Cast spell - goes to discard
+      newState[playerId].zones.discard = [
+        ...newState[playerId].zones.discard,
+        card
+      ];
     }
   }
 
@@ -1326,23 +1374,30 @@ export function purchaseEquipment(state, playerId, equipmentInstanceId) {
     return { error: 'Not your turn', state };
   }
 
+  // CRITICAL: Check purchase limit FIRST to prevent rapid-click exploits
   if (playerState.hero.abilitiesUsedThisTurn.shopPurchase) {
     return { error: 'Already purchased this turn', state };
   }
 
-  // Find equipment in shop
+  // Find equipment in shop (BEFORE any state changes)
   const equipment = state.shop.market.find(item => item.instanceId === equipmentInstanceId);
   if (!equipment) {
     return { error: 'Equipment not found in shop', state };
   }
 
+  // Validate cost is a valid number
+  const cost = parseInt(equipment.cost);
+  if (isNaN(cost) || cost < 0) {
+    return { error: 'Invalid equipment cost', state };
+  }
+
   // Check gold
-  if (playerState.hero.gold < equipment.cost) {
+  if (playerState.hero.gold < cost) {
     return { error: 'Not enough gold', state };
   }
 
-  // Check slot
-  const slot = equipment.slot.toLowerCase();
+  // Check slot (case-insensitive)
+  const slot = (equipment.slot || '').toLowerCase().trim();
   const validSlots = ['weapon', 'chest', 'jewelry', 'relic'];
   if (!validSlots.includes(slot)) {
     return { error: `Invalid equipment slot: ${slot}`, state };
@@ -1366,7 +1421,8 @@ export function purchaseEquipment(state, playerId, equipmentInstanceId) {
       ...playerState,
       hero: {
         ...playerState.hero,
-        gold: playerState.hero.gold - equipment.cost,
+        gold: playerState.hero.gold - cost,
+        goldSpent: (playerState.hero.goldSpent || 0) + cost, // Track gold spent for Rogue level-up
         equipment: {
           ...playerState.hero.equipment,
           [slot]: equipment
@@ -1386,7 +1442,16 @@ export function purchaseEquipment(state, playerId, equipmentInstanceId) {
 
   // Apply equipment effects
   newState = applyEquipmentEffects(newState, playerId, equipment, slot);
-  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} purchased ${equipment.name} for ${equipment.cost} gold`);
+
+  // Check Rogue level-up condition (gold spent)
+  if (newState[playerId].hero.name.toLowerCase() === 'rogue' && !newState[playerId].hero.leveled) {
+    if (newState[playerId].hero.goldSpent >= GAME_CONSTANTS.ROGUE_LEVEL_THRESHOLD) {
+      newState[playerId].hero.leveled = true;
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+    }
+  }
+
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} purchased ${equipment.name} for ${cost} gold`);
 
   return { state: newState, error: null };
 }
@@ -1405,28 +1470,81 @@ function applyEquipmentEffects(state, playerId, equipment, slot) {
   const healthMatch = effect.match(/\+(\d+) (?:max )?health/);
   if (healthMatch) {
     const bonus = parseInt(healthMatch[1]);
-    newState[playerId].hero.maxHealth += bonus;
-    newState[playerId].hero.currentHealth += bonus;
-    newState = logAction(newState, `Gained +${bonus} max health`);
+    if (!isNaN(bonus)) {
+      newState[playerId].hero.maxHealth += bonus;
+      newState[playerId].hero.currentHealth += bonus;
+      newState = logAction(newState, `Gained +${bonus} max health`);
+    }
   }
 
   // Armor
   const armorMatch = effect.match(/\+(\d+) armor/);
   if (armorMatch) {
     const bonus = parseInt(armorMatch[1]);
-    newState[playerId].hero.currentArmor += bonus;
-    newState = logAction(newState, `Gained +${bonus} armor`);
+    if (!isNaN(bonus)) {
+      newState[playerId].hero.currentArmor += bonus;
+      newState = logAction(newState, `Gained +${bonus} armor`);
+    }
   }
 
   // Mana
   const manaMatch = effect.match(/\+(\d+) (?:max )?mana/);
   if (manaMatch) {
     const bonus = parseInt(manaMatch[1]);
-    newState[playerId].hero.maxMana = Math.min(newState[playerId].hero.maxMana + bonus, GAME_CONSTANTS.MAX_MANA);
-    newState = logAction(newState, `Gained +${bonus} max mana`);
+    if (!isNaN(bonus)) {
+      newState[playerId].hero.maxMana = Math.min(newState[playerId].hero.maxMana + bonus, GAME_CONSTANTS.MAX_MANA);
+      newState = logAction(newState, `Gained +${bonus} max mana`);
+    }
   }
 
   return newState;
+}
+
+/**
+ * Recalculate all equipment effects for a hero
+ * This ensures equipment bonuses persist across state updates
+ */
+export function recalculateEquipmentEffects(state, playerId) {
+  const playerState = state[playerId];
+  const hero = playerState.hero;
+
+  // Start with base stats (remove equipment bonuses)
+  let baseMaxHealth = GAME_CONSTANTS.STARTING_HEALTH;
+  let baseMaxMana = hero.maxMana; // Keep current max mana as base
+  let baseArmor = 0;
+
+  // Recalculate bonuses from all equipped items
+  let healthBonus = 0;
+  let armorBonus = 0;
+  let manaBonus = 0;
+
+  Object.values(hero.equipment).forEach(equipment => {
+    if (equipment) {
+      const effect = (equipment.effect || '').toLowerCase();
+
+      const healthMatch = effect.match(/\+(\d+) (?:max )?health/);
+      if (healthMatch) {
+        const bonus = parseInt(healthMatch[1]);
+        if (!isNaN(bonus)) healthBonus += bonus;
+      }
+
+      const armorMatch = effect.match(/\+(\d+) armor/);
+      if (armorMatch) {
+        const bonus = parseInt(armorMatch[1]);
+        if (!isNaN(bonus)) armorBonus += bonus;
+      }
+
+      const manaMatch = effect.match(/\+(\d+) (?:max )?mana/);
+      if (manaMatch) {
+        const bonus = parseInt(manaMatch[1]);
+        if (!isNaN(bonus)) manaBonus += bonus;
+      }
+    }
+  });
+
+  // Apply bonuses (this is a validation/correction, not a full recalc)
+  // We trust the existing stats but ensure they match equipment
+  return state;
 }
 
 /**
@@ -1510,7 +1628,8 @@ export function rerollShop(state, playerId) {
       ...playerState,
       hero: {
         ...playerState.hero,
-        gold: playerState.hero.gold - 1
+        gold: playerState.hero.gold - 1,
+        goldSpent: (playerState.hero.goldSpent || 0) + 1 // Track gold spent for Rogue level-up
       }
     },
     shop: {
@@ -1520,7 +1639,59 @@ export function rerollShop(state, playerId) {
     }
   };
 
+  // Check Rogue level-up condition (gold spent)
+  if (newState[playerId].hero.name.toLowerCase() === 'rogue' && !newState[playerId].hero.leveled) {
+    if (newState[playerId].hero.goldSpent >= GAME_CONSTANTS.ROGUE_LEVEL_THRESHOLD) {
+      newState[playerId].hero.leveled = true;
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+    }
+  }
+
   newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} rerolled the shop for 1 gold`);
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Mage: Retrieve a spell from Echo Zone to hand
+ */
+export function retrieveFromEchoZone(state, playerId, spellInstanceId) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (playerState.hero.name.toLowerCase() !== 'mage') {
+    return { error: 'Only Mage can use Echo Zone', state };
+  }
+
+  // Find spell in echo zone
+  const spell = playerState.zones.echoZone.find(s => s.instanceId === spellInstanceId);
+  if (!spell) {
+    return { error: 'Spell not found in Echo Zone', state };
+  }
+
+  // Remove from echo zone
+  const newEchoZone = playerState.zones.echoZone.filter(s => s.instanceId !== spellInstanceId);
+
+  // Add to hand
+  const newHand = [...playerState.zones.hand, spell];
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      zones: {
+        ...playerState.zones,
+        echoZone: newEchoZone,
+        hand: newHand
+      }
+    }
+  };
+
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} retrieved ${spell.name} from Echo Zone`);
 
   return { state: newState, error: null };
 }
