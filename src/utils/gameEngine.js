@@ -36,7 +36,7 @@ export function initializeGame(gameConfig) {
     ai: createPlayerState('ai', true, ai.hero, aiDeck, aiStartMana, aiStartCards),
 
     // Shop (shared)
-    shop: initializeShop(shop.deck.cards),
+    shop: initializeShop(shop.cards),
 
     // Combat (temporary)
     combat: {
