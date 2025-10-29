@@ -679,8 +679,16 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
               </div>
             )}
 
-            {/* Player Battlefield - Bottom Half */}
-            <div className="flex-1 flex flex-col justify-start p-4 pt-2 overflow-y-auto pb-32">
+            {/* Player Battlefield - Bottom Half - LARGE DROP ZONE */}
+            <div
+              className={`flex-1 flex flex-col justify-start p-4 pt-2 overflow-y-auto pb-32 transition-all
+                ${dragOverBattlefield ? 'bg-green-900/20 shadow-[inset_0_0_50px_rgba(34,197,94,0.4)]' : ''}
+              `}
+              onDragEnter={handleBattlefieldDragEnter}
+              onDragOver={handleBattlefieldDragOver}
+              onDrop={handleBattlefieldDrop}
+              onDragLeave={handleBattlefieldDragLeave}
+            >
               <PlayerArea
                 state={playerState}
                 isPlayerTurn={isPlayerTurn}
@@ -697,22 +705,16 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
                 onSacrificeMinion={handleSacrificeMinion}
                 animatingAttackers={animatingAttackers}
                 animatingDefenders={animatingDefenders}
-                onBattlefieldDragEnter={handleBattlefieldDragEnter}
-                onBattlefieldDragOver={handleBattlefieldDragOver}
-                onBattlefieldDrop={handleBattlefieldDrop}
-                onBattlefieldDragLeave={handleBattlefieldDragLeave}
                 isDragOver={dragOverBattlefield}
               />
             </div>
           </div>
 
-          {/* MTG Arena-style Hand at Bottom - Fixed Position */}
+          {/* Hand at Bottom - Fixed Position */}
           <PlayerHandMTG
             hand={playerState.zones.hand}
             isPlayerTurn={isPlayerTurn}
             currentMana={playerState.hero.currentMana}
-            hoveredCard={hoveredCard}
-            onHover={setHoveredCard}
             onDragStart={handleCardDragStart}
             onDragEnd={handleCardDragEnd}
             draggedCard={draggedCard}
@@ -1022,90 +1024,88 @@ function OpponentArea({ state, combat, isPlayerTurn, selectedBlocker, onAttacker
   );
 }
 
-// MTG Arena-style Hand Component
-function PlayerHandMTG({ hand, isPlayerTurn, currentMana, hoveredCard, onHover, onDragStart, onDragEnd, draggedCard }) {
+// Compact Hand Card Component
+function CompactHandCard({ card, canPlay, isDragging, onDragStart, onDragEnd }) {
+  const isMinion = card.cardType === 'minion';
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-32 z-40 pointer-events-none">
-      <div className="relative h-full flex items-end justify-center">
-        {hand.map((card, index) => {
-          const canPlay = isPlayerTurn && currentMana >= card.manaCost;
-          const isHovered = hoveredCard?.instanceId === card.instanceId;
-          const isDragging = draggedCard?.instanceId === card.instanceId;
-          const totalCards = hand.length;
-          const centerIndex = (totalCards - 1) / 2;
+    <div
+      draggable={canPlay}
+      onDragStart={(e) => {
+        if (canPlay) {
+          onDragStart(card);
+          const img = new Image();
+          img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+          e.dataTransfer.setDragImage(img, 0, 0);
+        }
+      }}
+      onDragEnd={onDragEnd}
+      className={`relative w-36 h-24 rounded-lg border-2 p-2 text-xs select-none
+        ${isMinion ? 'bg-green-900/40 border-green-700' : 'bg-purple-900/40 border-purple-700'}
+        ${canPlay ? 'cursor-grab hover:border-amber-500 hover:scale-105' : 'opacity-50 cursor-not-allowed'}
+        ${isDragging ? 'opacity-30' : ''}
+        transition-transform
+      `}
+    >
+      {/* Card Name at Top */}
+      <div className="font-bold text-white text-sm truncate mb-1">{card.name}</div>
 
-          // Calculate position with slight fan effect
-          const offsetFromCenter = index - centerIndex;
-          const horizontalSpacing = 60; // pixels between cards
-          const xOffset = offsetFromCenter * horizontalSpacing;
-
-          // Slight rotation for fan effect
-          const rotation = offsetFromCenter * 2;
-
-          // Vertical position - hovered cards raise up
-          const yOffset = isHovered ? -250 : 0;
-
-          return (
-            <div
-              key={card.instanceId}
-              className="absolute pointer-events-auto"
-              draggable={canPlay}
-              style={{
-                transform: `translateX(${xOffset}px) translateY(${yOffset}px) rotate(${rotation}deg)`,
-                transformOrigin: 'bottom center',
-                transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                zIndex: isHovered ? 1000 : 100 + index,
-              }}
-              onMouseEnter={() => !isDragging && onHover(card)}
-              onMouseLeave={() => !isDragging && onHover(null)}
-              onDragStart={(e) => {
-                if (canPlay) {
-                  onDragStart(card);
-                  // Make drag image transparent
-                  const img = new Image();
-                  img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-                  e.dataTransfer.setDragImage(img, 0, 0);
-                }
-              }}
-              onDragEnd={onDragEnd}
-            >
-              <div style={{
-                clipPath: isHovered ? 'none' : 'inset(0 0 70% 0)',
-                transition: 'clip-path 0.3s ease',
-                opacity: isDragging ? 0.3 : 1,
-              }}>
-                <MTGCard
-                  card={card}
-                  canPlay={canPlay}
-                  isHovered={isHovered}
-                  isDragging={isDragging}
-                />
-              </div>
-            </div>
-          );
-        })}
+      {/* Mana Cost */}
+      <div className="absolute top-1 right-1 bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-xs">
+        {card.manaCost}
       </div>
 
-      {/* Hover Card Preview - Enlarged */}
-      {hoveredCard && !draggedCard && (
-        <div className="fixed left-1/2 bottom-32 -translate-x-1/2 pointer-events-none z-[1001]"
-          style={{
-            transform: 'translateX(-50%) scale(1.2)',
-          }}
-        >
-          <MTGCard
-            card={hoveredCard}
-            canPlay={isPlayerTurn && currentMana >= hoveredCard.manaCost}
-            isHovered={true}
-          />
+      {/* Stats for Minions */}
+      {isMinion && (
+        <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center">
+          <div className="bg-red-600 text-white rounded px-2 py-0.5 font-bold text-xs">
+            {card.attack}
+          </div>
+          <div className="bg-green-600 text-white rounded px-2 py-0.5 font-bold text-xs">
+            {card.health}
+          </div>
         </div>
       )}
+
+      {/* Type Badge */}
+      <div className="text-[10px] text-zinc-400 uppercase">
+        {card.cardType}
+      </div>
+    </div>
+  );
+}
+
+// Simple Hand Display Component
+function PlayerHandMTG({ hand, isPlayerTurn, currentMana, onDragStart, onDragEnd, draggedCard }) {
+  return (
+    <div className="fixed bottom-20 left-0 right-0 z-30 pointer-events-none flex justify-center">
+      <div className="flex items-center gap-2 pointer-events-auto max-w-screen-xl overflow-x-auto px-4 py-2 bg-zinc-900/80 rounded-t-lg">
+        {hand.length === 0 ? (
+          <div className="text-zinc-500 text-sm italic px-4">No cards in hand</div>
+        ) : (
+          hand.map((card) => {
+            const canPlay = isPlayerTurn && currentMana >= card.manaCost;
+            const isDragging = draggedCard?.instanceId === card.instanceId;
+
+            return (
+              <CompactHandCard
+                key={card.instanceId}
+                card={card}
+                canPlay={canPlay}
+                isDragging={isDragging}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+              />
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
 
 // Player Area Component
-function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders, onBattlefieldDragOver, onBattlefieldDrop, onBattlefieldDragEnter, onBattlefieldDragLeave, isDragOver }) {
+function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCard, selectedAttackers, onToggleAttacker, combatActive, combatPhase, selectedBlocker, onBlockerSelect, onRaiseMinion, onSacrificeMinion, animatingAttackers, animatingDefenders, isDragOver }) {
   const inBlockingPhase = combatActive && combatPhase === 'blocking' && !isPlayerTurn;
   const isNecromancer = state.hero.name.toLowerCase() === 'necromancer';
 
@@ -1134,16 +1134,8 @@ function PlayerArea({ state, isPlayerTurn, selectedCard, onSelectCard, onPlayCar
         </div>
       )}
 
-      {/* Player Battlefield - with drag and drop target */}
-      <div
-        className={`w-full h-full flex flex-col transition-all
-          ${isDragOver ? 'bg-green-900/20 shadow-[inset_0_0_50px_rgba(34,197,94,0.3)]' : ''}
-        `}
-        onDragEnter={onBattlefieldDragEnter}
-        onDragOver={onBattlefieldDragOver}
-        onDrop={onBattlefieldDrop}
-        onDragLeave={onBattlefieldDragLeave}
-      >
+      {/* Player Battlefield */}
+      <div className="w-full h-full flex flex-col">
         <div className="text-xs text-zinc-500/70 mb-2 text-center">
           YOUR BATTLEFIELD
           {!combatActive && isPlayerTurn && state.zones.battlefield.length > 0 && (
