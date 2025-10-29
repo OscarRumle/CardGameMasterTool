@@ -33,6 +33,119 @@ function GameBoard({ gameState, onStateChange, onGameOver }) {
     }
   }, [isPlayerTurn, gameState, onStateChange, onGameOver]);
 
+  // AI blocks automatically when player attacks (during player's turn)
+  useEffect(() => {
+    if (gameState.combat.active &&
+        gameState.combat.phase === 'blocking' &&
+        isPlayerTurn &&
+        !gameState.gameOver) {
+      // AI is defending, trigger blocking logic
+      const timer = setTimeout(() => {
+        console.log('AI is making blocking decisions...');
+
+        // Get available blockers (untapped minions)
+        let availableBlockers = gameState.ai.zones.battlefield.filter(minion => !minion.tapped);
+
+        // Sort attackers by attack power (block biggest threats)
+        const sortedAttackers = [...gameState.combat.attackers].sort((a, b) => (b.attack || 0) - (a.attack || 0));
+
+        let newState = gameState;
+
+        // Assign blockers to biggest attackers
+        for (const attacker of sortedAttackers) {
+          if (availableBlockers.length === 0) break;
+
+          const attackerDamage = attacker.attack || 0;
+
+          // Find a suitable blocker
+          const blocker = availableBlockers.find(minion => {
+            const minionHealth = minion.currentHealth || minion.health;
+            return minionHealth > attackerDamage || minionHealth <= attackerDamage;
+          });
+
+          if (blocker) {
+            const blockResult = declareBlocker(newState, 'ai', blocker.instanceId, attacker.instanceId);
+            if (!blockResult.error) {
+              newState = blockResult.state;
+              console.log(`AI blocked ${attacker.name} with ${blocker.name}`);
+              availableBlockers = availableBlockers.filter(m => m.instanceId !== blocker.instanceId);
+            }
+          }
+        }
+
+        // Confirm blockers
+        const confirmResult = confirmBlockers(newState, 'ai');
+        if (!confirmResult.error) {
+          newState = confirmResult.state;
+          console.log('AI confirmed blockers');
+          onStateChange(newState);
+
+          // Check for game over
+          if (newState.gameOver) {
+            onGameOver();
+          }
+        } else {
+          console.log(`AI confirm blockers failed: ${confirmResult.error}`);
+          onStateChange(newState);
+        }
+      }, 1000); // Short delay for AI blocking
+
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.combat.active, gameState.combat.phase, isPlayerTurn, gameState, onStateChange, onGameOver]);
+
+  // AI sets damage order automatically when player multi-blocks (during AI's turn)
+  useEffect(() => {
+    if (gameState.combat.active &&
+        gameState.combat.phase === 'damage_order' &&
+        !isPlayerTurn &&
+        !gameState.gameOver) {
+      // AI is attacking and needs to set damage order
+      const timer = setTimeout(() => {
+        console.log('AI is setting damage orders...');
+
+        let newState = gameState;
+
+        // For each attacker with multiple blockers, set damage order
+        for (const attacker of gameState.combat.attackers) {
+          const blockers = gameState.combat.blockers[attacker.instanceId] || [];
+
+          if (blockers.length > 1) {
+            // Order by lowest health first (kill as many as possible)
+            const orderedBlockers = [...blockers].sort((a, b) =>
+              (a.currentHealth || a.health) - (b.currentHealth || b.health)
+            );
+            const orderedIds = orderedBlockers.map(b => b.instanceId);
+
+            const orderResult = setDamageOrder(newState, 'ai', attacker.instanceId, orderedIds);
+            if (!orderResult.error) {
+              newState = orderResult.state;
+              console.log(`AI set damage order for ${attacker.name}`);
+            }
+          }
+        }
+
+        // Confirm all damage orders
+        const confirmResult = confirmDamageOrders(newState, 'ai');
+        if (!confirmResult.error) {
+          newState = confirmResult.state;
+          console.log('AI confirmed damage orders');
+          onStateChange(newState);
+
+          // Check for game over
+          if (newState.gameOver) {
+            onGameOver();
+          }
+        } else {
+          console.log(`AI confirm damage orders failed: ${confirmResult.error}`);
+          onStateChange(newState);
+        }
+      }, 1000); // Short delay for AI damage order
+
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.combat.active, gameState.combat.phase, isPlayerTurn, gameState, onStateChange, onGameOver]);
+
   const showError = (msg) => {
     setErrorMessage(msg);
     setTimeout(() => setErrorMessage(''), GAME_CONSTANTS.ERROR_MESSAGE_DURATION_MS);
