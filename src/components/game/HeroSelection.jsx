@@ -15,8 +15,7 @@ const HEROES = [
     subtitle: 'Fury Warrior',
     description: 'Build fury and unleash devastating attacks',
     mechanics: ['Fury', 'Weapon Attacks', 'Burst Damage'],
-    color: 'from-red-600 to-orange-900',
-    disabled: true
+    color: 'from-red-600 to-orange-900'
   },
   {
     id: 'mage',
@@ -24,8 +23,7 @@ const HEROES = [
     subtitle: 'Arcane Master',
     description: 'Build arcana and control the battlefield',
     mechanics: ['Arcana', 'Echo Zone', 'Spell Synergy'],
-    color: 'from-blue-600 to-cyan-900',
-    disabled: true
+    color: 'from-blue-600 to-cyan-900'
   },
   {
     id: 'rogue',
@@ -33,8 +31,7 @@ const HEROES = [
     subtitle: 'Shadow Assassin',
     description: 'Strike from stealth and spend gold for power',
     mechanics: ['Stealth', 'Gold Economy', 'Burst Combos'],
-    color: 'from-gray-600 to-slate-900',
-    disabled: true
+    color: 'from-gray-600 to-slate-900'
   }
 ];
 
@@ -90,17 +87,11 @@ function HeroSelection({ decks, onStartGame }) {
           <button
             key={hero.id}
             onClick={() => !hero.disabled && setSelectedHero(hero.id)}
-            disabled={hero.disabled}
             className={`relative p-6 rounded-xl bg-gradient-to-br ${hero.color}
               ${selectedHero === hero.id ? 'ring-4 ring-amber-500 scale-105' : 'ring-2 ring-zinc-700'}
-              ${hero.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 cursor-pointer'}
+              hover:scale-105 cursor-pointer
               transition-all duration-200 text-left`}
           >
-            {hero.disabled && (
-              <div className="absolute top-4 right-4 bg-zinc-900 text-zinc-400 text-xs px-3 py-1 rounded-full font-bold">
-                COMING SOON
-              </div>
-            )}
 
             <h3 className="text-2xl font-bold text-white mb-1">{hero.name}</h3>
             <p className="text-zinc-300 text-sm mb-3">{hero.subtitle}</p>
@@ -125,7 +116,7 @@ function HeroSelection({ decks, onStartGame }) {
           {/* Player Deck */}
           <div>
             <label className="block text-zinc-400 text-sm font-bold mb-2">
-              YOUR DECK (Necromancer)
+              YOUR DECK ({HEROES.find(h => h.id === selectedHero)?.name})
             </label>
             <select
               value={playerDeck?.id || ''}

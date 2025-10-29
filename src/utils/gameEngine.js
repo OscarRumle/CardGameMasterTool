@@ -1182,6 +1182,122 @@ function processDeaths(state, playerId) {
 }
 
 /**
+ * Necromancer: Raise a minion from graveyard
+ */
+export function raiseMinion(state, playerId, minionInstanceId) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (state.phase !== 'main') {
+    return { error: 'Can only raise during main phase', state };
+  }
+
+  if (playerState.hero.name.toLowerCase() !== 'necromancer') {
+    return { error: 'Only Necromancer can raise minions', state };
+  }
+
+  // Find minion in graveyard
+  const minion = playerState.zones.graveyard.find(m => m.instanceId === minionInstanceId);
+  if (!minion) {
+    return { error: 'Minion not found in graveyard', state };
+  }
+
+  // Remove from graveyard
+  const newGraveyard = playerState.zones.graveyard.filter(m => m.instanceId !== minionInstanceId);
+
+  // Restore to full health and add to battlefield
+  const raisedMinion = {
+    ...minion,
+    currentHealth: minion.health,
+    tapped: !playerState.hero.leveled, // Leveled necromancer raises untapped
+    summoningSickness: !playerState.hero.leveled
+  };
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      zones: {
+        ...playerState.zones,
+        graveyard: newGraveyard,
+        battlefield: [...playerState.zones.battlefield, raisedMinion]
+      }
+    }
+  };
+
+  // Track level progress
+  if (!newState[playerId].hero.leveled) {
+    newState[playerId].hero.levelProgress += 1;
+
+    if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.NECROMANCER_LEVEL_THRESHOLD) {
+      newState[playerId].hero.leveled = true;
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+    }
+  }
+
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} raised ${minion.name} from the dead!`);
+
+  return { state: newState, error: null };
+}
+
+/**
+ * Necromancer: Sacrifice a minion (gain 1 mana)
+ */
+export function sacrificeMinion(state, playerId, minionInstanceId) {
+  const playerState = state[playerId];
+
+  // Validate
+  if (state.currentPlayer !== playerId) {
+    return { error: 'Not your turn', state };
+  }
+
+  if (state.phase !== 'main') {
+    return { error: 'Can only sacrifice during main phase', state };
+  }
+
+  if (playerState.hero.name.toLowerCase() !== 'necromancer') {
+    return { error: 'Only Necromancer can sacrifice minions', state };
+  }
+
+  // Find minion on battlefield
+  const minion = playerState.zones.battlefield.find(m => m.instanceId === minionInstanceId);
+  if (!minion) {
+    return { error: 'Minion not found on battlefield', state };
+  }
+
+  // Remove from battlefield, add to graveyard
+  const newBattlefield = playerState.zones.battlefield.filter(m => m.instanceId !== minionInstanceId);
+  const newGraveyard = [...playerState.zones.graveyard, minion];
+
+  // Gain 1 mana
+  const newMana = Math.min(playerState.hero.currentMana + 1, playerState.hero.maxMana);
+
+  let newState = {
+    ...state,
+    [playerId]: {
+      ...playerState,
+      hero: {
+        ...playerState.hero,
+        currentMana: newMana
+      },
+      zones: {
+        ...playerState.zones,
+        battlefield: newBattlefield,
+        graveyard: newGraveyard
+      }
+    }
+  };
+
+  newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} sacrificed ${minion.name} for 1 mana`);
+
+  return { state: newState, error: null };
+}
+
+/**
  * Purchase equipment from shop
  */
 export function purchaseEquipment(state, playerId, equipmentInstanceId) {
