@@ -1,6 +1,26 @@
 // Game Engine - Pure functions for game state management
 // Follows immutability pattern: never mutate state, always return new state
 
+// Game Constants
+export const GAME_CONSTANTS = {
+  STARTING_HEALTH: 30,
+  MAX_MANA: 10,
+  FIRST_PLAYER_STARTING_MANA: 1,
+  SECOND_PLAYER_STARTING_MANA: 2,
+  FIRST_PLAYER_STARTING_CARDS: 4,
+  SECOND_PLAYER_STARTING_CARDS: 5,
+  MAX_FURY: 12,
+  BARBARIAN_LEVEL_THRESHOLD: 15,
+  NECROMANCER_LEVEL_THRESHOLD: 5,
+  MAGE_LEVEL_THRESHOLD: 15,
+  ROGUE_LEVEL_THRESHOLD: 15,
+  MAGE_ECHO_ZONE_MAX: 3,
+  SHOP_SIZE: 5,
+  SHOP_REFRESH_ROUNDS: [5, 9],
+  DARK_PACT_HP_COST: 2,
+  MILL_DAMAGE: 1
+};
+
 /**
  * Create initial game state from game configuration
  */
@@ -14,12 +34,11 @@ export function initializeGame(gameConfig) {
   // Determine first player (random for now)
   const firstPlayer = Math.random() < 0.5 ? 'player' : 'ai';
 
-  // First player gets 1 mana and 4 cards
-  // Second player gets 2 mana and 5 cards
-  const playerStartMana = firstPlayer === 'player' ? 1 : 2;
-  const aiStartMana = firstPlayer === 'ai' ? 1 : 2;
-  const playerStartCards = firstPlayer === 'player' ? 4 : 5;
-  const aiStartCards = firstPlayer === 'ai' ? 4 : 5;
+  // First player gets 1 mana and 4 cards, Second player gets 2 mana and 5 cards
+  const playerStartMana = firstPlayer === 'player' ? GAME_CONSTANTS.FIRST_PLAYER_STARTING_MANA : GAME_CONSTANTS.SECOND_PLAYER_STARTING_MANA;
+  const aiStartMana = firstPlayer === 'ai' ? GAME_CONSTANTS.FIRST_PLAYER_STARTING_MANA : GAME_CONSTANTS.SECOND_PLAYER_STARTING_MANA;
+  const playerStartCards = firstPlayer === 'player' ? GAME_CONSTANTS.FIRST_PLAYER_STARTING_CARDS : GAME_CONSTANTS.SECOND_PLAYER_STARTING_CARDS;
+  const aiStartCards = firstPlayer === 'ai' ? GAME_CONSTANTS.FIRST_PLAYER_STARTING_CARDS : GAME_CONSTANTS.SECOND_PLAYER_STARTING_CARDS;
 
   const state = {
     // Match level
@@ -90,8 +109,8 @@ function createPlayerState(playerId, isAI, heroName, deck, startMana, startCards
 function createHeroState(heroName, startMana) {
   const baseHero = {
     name: heroName,
-    currentHealth: 30,
-    maxHealth: 30,
+    currentHealth: GAME_CONSTANTS.STARTING_HEALTH,
+    maxHealth: GAME_CONSTANTS.STARTING_HEALTH,
     currentArmor: 0,
     currentMana: startMana,
     maxMana: startMana,
@@ -134,9 +153,9 @@ function createHeroState(heroName, startMana) {
         classResource: {
           type: 'fury',
           value: 0,
-          max: 12
+          max: GAME_CONSTANTS.MAX_FURY
         },
-        levelCondition: 'Deal 15+ weapon damage',
+        levelCondition: `Deal ${GAME_CONSTANTS.BARBARIAN_LEVEL_THRESHOLD}+ weapon damage`,
         levelBonus: 'Weapon attacks deal +Armor damage'
       };
 
@@ -462,8 +481,8 @@ function performUpkeep(state) {
     summoningSickness: false // Remove summoning sickness
   }));
 
-  // Gain mana (cap at 10)
-  const newMaxMana = Math.min(playerState.hero.maxMana + 1, 10);
+  // Gain mana (cap at MAX_MANA)
+  const newMaxMana = Math.min(playerState.hero.maxMana + 1, GAME_CONSTANTS.MAX_MANA);
 
   // Draw a card
   const deck = [...playerState.zones.deck];
@@ -567,7 +586,18 @@ export function playCard(state, playerId, card, target = null) {
     // Mage: Increment Arcana when casting spell
     if (newState[playerId].hero.name.toLowerCase() === 'mage') {
       newState[playerId].hero.classResource.value += 1;
-      newState[playerId].hero.levelProgress += 1;
+
+      // Level progress tracks spell count, not Arcana value
+      if (!newState[playerId].hero.leveled) {
+        newState[playerId].hero.levelProgress += 1;
+
+        // Check level-up condition
+        if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.MAGE_LEVEL_THRESHOLD) {
+          newState[playerId].hero.leveled = true;
+          newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+        }
+      }
+
       newState = logAction(newState, `Arcana: ${newState[playerId].hero.classResource.value}`);
     }
   }
@@ -609,8 +639,20 @@ function applySpellEffects(state, playerId, spell, target) {
     const damageMatch = effect.match(/deal (\d+) damage/);
     if (damageMatch) {
       const damage = parseInt(damageMatch[1]);
-      // For now, just log it - full targeting system comes later
-      newState = logAction(newState, `${spell.name} deals ${damage} damage`);
+
+      // For now, default to opponent hero as target
+      // TODO: Implement proper targeting system for minions
+      const opponentId = playerId === 'player' ? 'ai' : 'player';
+      newState[opponentId].hero.currentHealth -= damage;
+
+      // Check win condition
+      if (newState[opponentId].hero.currentHealth <= 0) {
+        newState.gameOver = true;
+        newState.winner = playerId;
+        newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} wins!`);
+      } else {
+        newState = logAction(newState, `${spell.name} dealt ${damage} damage to opponent`);
+      }
     }
   }
 
@@ -703,9 +745,14 @@ export function useHeroPower(state, playerId) {
   switch (heroName) {
     case 'necromancer':
       // Dark Pact: Sacrifice 2 HP, Draw a card
-      newState[playerId].hero.currentHealth -= 2;
+      // Check if player has enough HP to sacrifice
+      if (newState[playerId].hero.currentHealth <= GAME_CONSTANTS.DARK_PACT_HP_COST) {
+        return { error: 'Not enough health to sacrifice', state };
+      }
+
+      newState[playerId].hero.currentHealth -= GAME_CONSTANTS.DARK_PACT_HP_COST;
       newState = drawCard(newState, playerId);
-      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Dark Pact (sacrificed 2 HP, drew a card)`);
+      newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Dark Pact (sacrificed ${GAME_CONSTANTS.DARK_PACT_HP_COST} HP, drew a card)`);
       break;
 
     case 'barbarian':
@@ -795,7 +842,18 @@ export function useHeroAttack(state, playerId, target) {
       if (furyDamage > 0) {
         newState[opponentId].hero.currentHealth -= furyDamage;
         newState[playerId].hero.classResource.value = 0;
-        newState[playerId].hero.levelProgress += furyDamage;
+
+        // Only increment progress if not yet leveled
+        if (!newState[playerId].hero.leveled) {
+          newState[playerId].hero.levelProgress += furyDamage;
+
+          // Check level-up condition
+          if (newState[playerId].hero.levelProgress >= GAME_CONSTANTS.BARBARIAN_LEVEL_THRESHOLD) {
+            newState[playerId].hero.leveled = true;
+            newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} leveled up! ${newState[playerId].hero.levelBonus}`);
+          }
+        }
+
         newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} used Fury Strike for ${furyDamage} damage (Fury reset to 0)`);
       } else {
         newState = logAction(newState, `${playerId === 'player' ? 'You' : 'AI'} has no Fury to attack with`);

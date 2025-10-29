@@ -1,5 +1,5 @@
 // Simple AI - Makes basic legal moves
-import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard } from './gameEngine';
+import { playCard, useHeroPower, useHeroAttack, endTurn, canPlayCard, GAME_CONSTANTS } from './gameEngine';
 
 /**
  * AI takes its turn
@@ -35,15 +35,24 @@ export function aiTakeTurn(initialState) {
       }
     }
 
-    // If no cards played, try hero power
+    // If no cards played, try hero power (but check if safe first)
     if (!actionTaken && !state.ai.hero.abilitiesUsedThisTurn.heroPower) {
-      const powerResult = useHeroPower(state, 'ai');
+      // Safety check for Necromancer Dark Pact
+      const heroName = state.ai.hero.name.toLowerCase();
+      const shouldUseHeroPower = !(
+        heroName === 'necromancer' &&
+        state.ai.hero.currentHealth <= GAME_CONSTANTS.DARK_PACT_HP_COST
+      );
 
-      if (!powerResult.error) {
-        state = powerResult.state;
-        actionTaken = true;
-        actionsPerformed++;
-        console.log('AI used hero power');
+      if (shouldUseHeroPower) {
+        const powerResult = useHeroPower(state, 'ai');
+
+        if (!powerResult.error) {
+          state = powerResult.state;
+          actionTaken = true;
+          actionsPerformed++;
+          console.log('AI used hero power');
+        }
       }
     }
 
